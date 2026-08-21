@@ -1,0 +1,3698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tidepool</title>
+<style>
+  :root{
+    --ui:1;
+    --ink:#EAF2F0; --dim:#8FA6AD; --panel:rgba(9,16,28,.60); --edge:rgba(234,242,240,.11);
+    --lantern:#FFD97D; --tide:#6FD3C7;
+    --mono:"Cascadia Mono","Cascadia Code",Consolas,"DejaVu Sans Mono",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#070C16;
+    font-family:var(--mono);color:var(--ink);user-select:none;-webkit-user-select:none}
+  #scene{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;image-rendering:pixelated;display:block}
+
+  .panel{position:fixed;border-radius:calc(11px*var(--ui));padding:0;line-height:1.5;
+    font-size:calc(13px*var(--ui));
+    background:linear-gradient(150deg,rgba(255,255,255,.085),rgba(255,255,255,.022) 42%,rgba(6,12,22,.30));
+    border:1px solid rgba(255,255,255,.13);
+    backdrop-filter:blur(22px) saturate(150%);-webkit-backdrop-filter:blur(22px) saturate(150%);
+    box-shadow:0 8px 34px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.16),
+               inset 0 -1px 0 rgba(255,255,255,.04);
+    transition:opacity .45s cubic-bezier(.4,0,.2,1),box-shadow .3s ease,border-color .3s ease,transform .3s ease}
+  .panel:hover{border-color:rgba(255,255,255,.20);box-shadow:0 10px 40px rgba(0,0,0,.40),
+               inset 0 1px 0 rgba(255,255,255,.22),inset 0 -1px 0 rgba(255,255,255,.05)}
+  .panel::after{content:"";position:absolute;inset:0;border-radius:calc(11px*var(--ui));pointer-events:none;
+    background:linear-gradient(160deg,rgba(255,255,255,.10),transparent 38%)}
+  .panel>*{position:relative;z-index:1}
+  .panel .hd{display:flex;align-items:center;gap:calc(8px*var(--ui));
+    padding:calc(10px*var(--ui)) calc(14px*var(--ui)) calc(9px*var(--ui));cursor:grab}
+  .panel .hd:active{cursor:grabbing}
+  .panel .hd h2{margin:0;flex:1;font-size:calc(9.5px*var(--ui));font-weight:600;letter-spacing:.24em;
+    text-transform:uppercase;color:var(--dim)}
+  .panel .fold{background:none;border:none;color:var(--dim);font-family:var(--mono);font-size:13px;
+    line-height:1;padding:2px 4px;cursor:pointer;opacity:.6}
+  .panel .fold:hover{opacity:1}
+  .panel .bd{padding:0 calc(14px*var(--ui)) calc(14px*var(--ui))}
+  .panel.closed .bd{display:none}
+  .panel.closed .hd{padding-bottom:10px}
+
+  /* the scene gets bright at midday; a whisper of shade keeps the glass legible */
+  #vignette{position:fixed;inset:0;pointer-events:none;z-index:0;
+    background:
+      radial-gradient(140% 110% at 50% 45%,transparent 52%,rgba(4,10,20,.30) 100%),
+      linear-gradient(to bottom,rgba(4,10,20,.16),transparent 22%,transparent 74%,rgba(4,10,20,.20));
+    opacity:var(--vig,.55);transition:opacity 2s linear}
+  .panel,#toasts,#colophon,#zentag,#audioNag{z-index:2}
+
+  body.zen .panel,body.zen #colophon{opacity:0;pointer-events:none}
+  #zentag{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);font-size:9px;
+    letter-spacing:.24em;text-transform:uppercase;color:var(--dim);opacity:0;transition:opacity .4s}
+  body.zen #zentag{opacity:.35}
+
+  #clock{background:none;border:none;backdrop-filter:none;box-shadow:none}
+  #clock::after{display:none}
+  #clock:hover{box-shadow:none;border-color:transparent}
+  #clock .hd{display:none}
+  #clock .bd{padding:0;text-shadow:0 2px 18px rgba(0,0,0,.75)}
+  #time{font-size:calc(56px*var(--ui));font-weight:300;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+  #date{margin-top:calc(5px*var(--ui));font-size:calc(11px*var(--ui));letter-spacing:.28em;text-transform:uppercase;color:var(--dim)}
+  #tideline{margin-top:calc(2px*var(--ui));font-size:calc(11px*var(--ui));letter-spacing:.28em;
+    text-transform:uppercase;color:var(--dim);opacity:.8}
+  #solar{margin-top:calc(2px*var(--ui));font-size:calc(11px*var(--ui));letter-spacing:.28em;text-transform:uppercase;color:var(--tide);opacity:.85}
+
+  #notes{width:calc(268px*var(--ui))}
+  #notepad{width:100%;min-height:calc(132px*var(--ui));max-height:30vh;resize:vertical;background:transparent;border:none;
+    outline:none;color:var(--ink);font-family:var(--mono);font-size:calc(13px*var(--ui));line-height:1.7;display:block}
+  #notepad::placeholder{color:var(--dim);opacity:.5}
+  #saved{margin-top:6px;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);
+    opacity:0;transition:opacity .24s}
+  #saved.show{opacity:.8}
+
+  #sky{width:calc(268px*var(--ui))}
+  #skyList{font-size:calc(11px*var(--ui));line-height:1.85;color:var(--dim)}
+  #skyList b{color:var(--lantern);font-weight:400}
+  #skyFoot{margin-top:7px;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);opacity:.65}
+
+  #stones{width:calc(218px*var(--ui))}
+  .row{display:flex;justify-content:space-between;gap:16px;font-size:calc(12px*var(--ui))}
+  .row+.row{margin-top:3px}
+  .row span:last-child{font-variant-numeric:tabular-nums;color:var(--lantern)}
+  #charge{margin-top:9px;height:3px;background:rgba(234,242,240,.12);overflow:hidden}
+  #chargeFill{height:100%;width:0%;background:var(--lantern)}
+  #hint{margin-top:8px;font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim)}
+
+  #media{width:calc(434px*var(--ui))}
+  #track{font-size:calc(12px*var(--ui));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:8px}
+  #track.idle{color:var(--dim)}
+  #bar{height:2px;background:rgba(234,242,240,.12);margin-bottom:10px;cursor:pointer}
+  #barFill{height:100%;width:0%;background:var(--tide)}
+  #eq{display:flex;align-items:flex-end;gap:2px;height:15px;margin-bottom:9px}
+  #eq i{flex:1;background:var(--tide);opacity:.5;height:2px;border-radius:1px}
+  #ctrls{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .btn{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.13);color:var(--ink);
+    font-family:var(--mono);font-size:calc(9.5px*var(--ui));letter-spacing:.13em;text-transform:uppercase;
+    padding:calc(6px*var(--ui)) calc(10px*var(--ui));
+    cursor:pointer;border-radius:5px;line-height:1;
+    transition:background .22s ease,border-color .22s ease,transform .12s ease}
+  .btn:hover{background:rgba(255,255,255,.11);border-color:rgba(255,255,255,.26)}
+  .btn:active{transform:scale(.96)}
+  .btn:focus-visible{outline:2px solid var(--tide);outline-offset:2px}
+  .btn.on{border-color:var(--lantern);color:var(--lantern)}
+  .sp{flex:1}
+  input[type=file]{display:none}
+
+  #toasts{position:fixed;top:36px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;
+    gap:8px;align-items:center;pointer-events:none;z-index:5}
+  .toast{border-radius:calc(10px*var(--ui));padding:calc(10px*var(--ui)) calc(19px*var(--ui));
+    font-size:calc(11px*var(--ui));letter-spacing:.09em;white-space:nowrap;
+    background:linear-gradient(150deg,rgba(255,255,255,.09),rgba(6,12,22,.34));
+    border:1px solid rgba(255,255,255,.15);
+    backdrop-filter:blur(22px) saturate(150%);-webkit-backdrop-filter:blur(22px) saturate(150%);
+    box-shadow:0 8px 30px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.18);
+    opacity:0;transform:translateY(-10px) scale(.97);
+    transition:opacity .55s cubic-bezier(.4,0,.2,1),transform .55s cubic-bezier(.4,0,.2,1)}
+  .toast.in{opacity:1;transform:translateY(0) scale(1)}
+  .toast b{color:var(--lantern);font-weight:400}
+
+  #colophon{position:fixed;font-size:calc(9px*var(--ui));letter-spacing:.2em;text-transform:uppercase;
+    color:var(--dim);opacity:.35;text-align:right;line-height:2;transition:opacity .35s}
+
+  #starinfo{position:fixed;z-index:6;pointer-events:none;opacity:0;
+    padding:calc(9px*var(--ui)) calc(13px*var(--ui));border-radius:calc(9px*var(--ui));
+    background:linear-gradient(150deg,rgba(255,255,255,.09),rgba(6,12,22,.44));
+    border:1px solid rgba(255,255,255,.15);min-width:calc(178px*var(--ui));
+    backdrop-filter:blur(20px) saturate(150%);-webkit-backdrop-filter:blur(20px) saturate(150%);
+    box-shadow:0 8px 26px rgba(0,0,0,.36),inset 0 1px 0 rgba(255,255,255,.16);
+    transition:opacity .18s ease,left .09s linear,top .09s linear}
+  #starinfo.on{opacity:1}
+  #starinfo .sn{font-size:calc(13px*var(--ui));margin-bottom:calc(6px*var(--ui));color:var(--ink)}
+  #starinfo .sr{display:flex;justify-content:space-between;gap:calc(16px*var(--ui));
+    font-size:calc(10px*var(--ui));color:var(--dim);line-height:1.9}
+  #starinfo .sr span:last-child{color:var(--tide);font-variant-numeric:tabular-nums}
+  #starinfo .sf{margin-top:calc(6px*var(--ui));font-size:calc(9.5px*var(--ui));
+    color:var(--lantern);opacity:.85;line-height:1.6;max-width:calc(210px*var(--ui))}
+  body.zen #starinfo{opacity:0}
+
+  #audioNag{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:8;
+    padding:11px 20px;border-radius:9px;font-size:11px;line-height:1.7;text-align:center;
+    background:linear-gradient(150deg,rgba(255,255,255,.10),rgba(6,12,22,.42));
+    border:1px solid rgba(255,217,125,.34);color:var(--ink);cursor:pointer;
+    backdrop-filter:blur(22px) saturate(150%);-webkit-backdrop-filter:blur(22px) saturate(150%);
+    box-shadow:0 8px 30px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.16)}
+  body.zen #audioNag{opacity:0;pointer-events:none;transition:opacity .4s}
+
+  @media (max-width:1250px){#sky{display:none}}
+  @media (max-width:1080px){#notes,#colophon{display:none}}
+</style>
+</head>
+<body>
+
+<canvas id="scene" width="576" height="324"></canvas>
+<div id="vignette"></div>
+
+<div class="panel" id="clock" data-fixed="1">
+  <div class="hd"><h2>Time</h2></div>
+  <div class="bd"><div id="time">--:--</div><div id="date">&nbsp;</div><div id="solar">&nbsp;</div><div id="tideline">&nbsp;</div></div>
+</div>
+
+<div class="panel" id="notes">
+  <div class="hd"><h2>Notes</h2><button class="fold" title="Collapse">&minus;</button></div>
+  <div class="bd">
+    <textarea id="notepad" spellcheck="false" placeholder="Anything you need to keep in front of you."></textarea>
+    <div id="saved">Saved</div>
+  </div>
+</div>
+
+<div class="panel" id="sky">
+  <div class="hd"><h2>Overhead now</h2><button class="fold" title="Collapse">&minus;</button></div>
+  <div class="bd"><div id="skyList"></div><div id="skyFoot">Click a star to trace &middot; <b>,</b> and <b>.</b> turn the view</div></div>
+</div>
+
+<div class="panel" id="stones">
+  <div class="hd"><h2>Skipping stones</h2><button class="fold" title="Collapse">&minus;</button></div>
+  <div class="bd">
+    <div class="row"><span>Last throw</span><span id="last">&mdash;</span></div>
+    <div class="row"><span>Best</span><span id="best">0</span></div>
+    <div id="charge"><div id="chargeFill"></div></div>
+    <div id="hint">Aim low and flat for a long run</div>
+  </div>
+</div>
+
+<div class="panel" id="media">
+  <div class="hd"><h2>Sound</h2><button class="fold" title="Collapse">&minus;</button></div>
+  <div class="bd">
+    <div id="track" class="idle">Nothing playing</div>
+    <div id="bar"><div id="barFill"></div></div>
+    <div id="eq"></div>
+    <div id="ctrls">
+      <button class="btn" id="ambBtn">Ambience</button>
+      <button class="btn" id="lofiBtn">Lo-fi</button>
+      <button class="btn" id="nightBtn">Nocturne</button>
+      <div class="sp"></div>
+      <button class="btn" id="prev">Prev</button>
+      <button class="btn" id="play">Play</button>
+      <button class="btn" id="next">Next</button>
+      <button class="btn" id="pickAudio">Files</button>
+      <button class="btn" id="pickVideo">Film</button>
+      <button class="btn" id="screenToggle">Screen</button>
+    </div>
+  </div>
+</div>
+
+<div id="starinfo"></div>
+<div id="toasts"></div>
+<div id="zentag">Press H for the widgets</div>
+<div id="colophon">Tidepool v15<br>No network &middot; real sky &middot; synthesised sound</div>
+
+<input type="file" id="audioInput" accept="audio/*" multiple>
+<input type="file" id="videoInput" accept="video/*">
+<audio id="player"></audio>
+<video id="film" playsinline muted loop></video>
+
+<script>
+(function(){
+"use strict";
+
+var LAT=44.8878, LON=20.5178, TARGET_FPS=60;
+var autoSound=true, autoLofi=false;
+var RAD=Math.PI/180, DEG=180/Math.PI;
+var W=576, H=324;   // W is recomputed from the display aspect at runtime
+var HORIZON=166, EDGE=247, GROUND=260;      // sky | sea | foam line | walker's feet
+// In the northern hemisphere the sun and stars culminate in the SOUTH, so
+// the camera faces south and east falls on the left. South of the equator
+// they culminate in the NORTH, the camera faces north, and east is on the
+// right — which is why southern skies appear to run the other way.
+var FOV=250;
+// Which way the camera looks, as a compass bearing. You cannot see the whole
+// sky at once, so this matters: face the equator and you get the sun's arc but
+// the pole is behind you; face the pole and you get the circumpolar figures.
+// Default is equator-ward, which is where the sun and moon are.
+var VIEW=null;
+function facing(){ return VIEW===null ? (LAT>=0?180:0) : VIEW }
+function turnView(deg){
+  VIEW=(((facing()+deg)%360)+360)%360;
+  store.set("tidepool.view",String(VIEW));
+  var pts=["north","north-east","east","south-east","south","south-west","west","north-west"];
+  toast("Looking "+pts[Math.round(VIEW/45)%8]);
+  updateClock();
+}
+var BREAK_MINUTES=20;
+
+var store={
+  get:function(k,d){try{var v=localStorage.getItem(k);return v===null?d:v}catch(e){return d}},
+  set:function(k,v){try{localStorage.setItem(k,v);return true}catch(e){return false}}
+};
+
+// ===================================================================
+// SOUND — everything below is synthesised. No audio files, no network.
+// ===================================================================
+var Snd = {
+  ctx:null, master:null, ambGain:null, musGain:null,
+  ambOn:false, musOn:false, ready:false,
+
+  boot:function(){
+    if(this.ctx) return true;
+    var AC=window.AudioContext||window.webkitAudioContext;
+    if(!AC) return false;
+    try{
+      this.ctx=new AC();
+      this.master=this.ctx.createGain(); this.master.gain.value=0.85;
+      this.master.connect(this.ctx.destination);
+      this.ambGain=this.ctx.createGain(); this.ambGain.gain.value=0; this.ambGain.connect(this.master);
+      this.musGain=this.ctx.createGain(); this.musGain.gain.value=0; this.musGain.connect(this.master);
+      this.pan=c=>{var q=this.ctx.createStereoPanner?this.ctx.createStereoPanner():null;return q};
+      this.ready=true;
+      this.wake();
+      return true;
+    }catch(e){ return false }
+  },
+
+  // Chrome creates contexts suspended. Without this nothing is ever heard.
+  wake:function(){
+    if(!this.ctx) return;
+    if(this.ctx.state==="suspended"){
+      var p=this.ctx.resume();
+      if(p&&p.catch) p.catch(function(){});
+    }
+  },
+
+  noiseBuf:function(sec,brown){
+    var n=Math.floor(this.ctx.sampleRate*sec);
+    var b=this.ctx.createBuffer(1,n,this.ctx.sampleRate), d=b.getChannelData(0);
+    var last=0;
+    for(var i=0;i<n;i++){
+      var w=Math.random()*2-1;
+      if(brown){ last=(last+0.02*w)/1.02; d[i]=last*3.5 } else d[i]=w;
+    }
+    return b;
+  },
+
+  // --- sea, wind: looping filtered noise with a slow swell --------
+  startAmbience:function(){
+    if(!this.boot()||this.ambOn) return;
+    var c=this.ctx, t=c.currentTime;
+
+    var surf=c.createBufferSource(); surf.buffer=this.noiseBuf(6,true); surf.loop=true;
+    var sf=c.createBiquadFilter(); sf.type="lowpass"; sf.frequency.value=520; sf.Q.value=0.6;
+    var sg=c.createGain(); sg.gain.value=0.34;
+    surf.connect(sf); sf.connect(sg); sg.connect(this.ambGain); surf.start();
+
+    var foam=c.createBufferSource(); foam.buffer=this.noiseBuf(5,false); foam.loop=true;
+    var ff=c.createBiquadFilter(); ff.type="bandpass"; ff.frequency.value=2100; ff.Q.value=0.5;
+    var fg=c.createGain(); fg.gain.value=0.028;
+    foam.connect(ff); ff.connect(fg); fg.connect(this.ambGain); foam.start();
+
+    // swell: two out-of-phase LFOs so waves never land on a metronome
+    var l1=c.createOscillator(); l1.frequency.value=0.085;
+    var l1g=c.createGain(); l1g.gain.value=0.16;
+    l1.connect(l1g); l1g.connect(sg.gain); l1.start();
+
+    var l2=c.createOscillator(); l2.frequency.value=0.053;
+    var l2g=c.createGain(); l2g.gain.value=0.020;
+    l2.connect(l2g); l2g.connect(fg.gain); l2.start();
+
+    var l3=c.createOscillator(); l3.frequency.value=0.037;
+    var l3g=c.createGain(); l3g.gain.value=180;
+    l3.connect(l3g); l3g.connect(sf.frequency); l3.start();
+
+    var wind=c.createBufferSource(); wind.buffer=this.noiseBuf(7,true); wind.loop=true;
+    var wf=c.createBiquadFilter(); wf.type="lowpass"; wf.frequency.value=340;
+    var wg=c.createGain(); wg.gain.value=0.07;
+    wind.connect(wf); wf.connect(wg); wg.connect(this.ambGain); wind.start();
+    var l4=c.createOscillator(); l4.frequency.value=0.028;
+    var l4g=c.createGain(); l4g.gain.value=0.045;
+    l4.connect(l4g); l4g.connect(wg.gain); l4.start();
+
+    this.ambGain.gain.cancelScheduledValues(t);
+    this.ambGain.gain.setValueAtTime(0.0001,t);
+    this.ambGain.gain.linearRampToValueAtTime(0.9,t+2.5);
+    this.ambOn=true;
+  },
+  stopAmbience:function(){
+    if(!this.ready||!this.ambOn) return;
+    var t=this.ctx.currentTime;
+    this.ambGain.gain.cancelScheduledValues(t);
+    this.ambGain.gain.setValueAtTime(this.ambGain.gain.value,t);
+    this.ambGain.gain.linearRampToValueAtTime(0.0001,t+1.2);
+    this.ambOn=false;
+  },
+
+  // --- a wave breaking: long swell in, sharp crash, hiss of retreat ---
+  breakWave:function(size){
+    if(!this.ready||!this.ambOn) return;
+    var c=this.ctx, t=c.currentTime;
+    var big = size===undefined ? Math.random() : size;
+    var rise = 0.9+big*1.5, crash = 0.16, tail = 1.6+big*1.9;
+    var peak = 0.055+big*0.115;
+
+    var dest=this.ambGain;
+    if(c.createStereoPanner){
+      var pn=c.createStereoPanner(); pn.pan.value=(Math.random()*2-1)*0.6;
+      pn.connect(this.ambGain); dest=pn;
+    }
+
+    // the body of the wave rolling in
+    var n=c.createBufferSource(); n.buffer=this.noiseBuf(6,true); n.loop=true;
+    var f=c.createBiquadFilter(); f.type="lowpass";
+    f.frequency.setValueAtTime(260,t);
+    f.frequency.linearRampToValueAtTime(1500+big*1400,t+rise+crash);
+    f.frequency.exponentialRampToValueAtTime(320,t+rise+crash+tail);
+    var g=c.createGain();
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.linearRampToValueAtTime(peak*0.42,t+rise*0.75);
+    g.gain.linearRampToValueAtTime(peak,t+rise+crash);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+rise+crash+tail);
+    n.connect(f); f.connect(g); g.connect(dest);
+    n.start(t); n.stop(t+rise+crash+tail+0.2);
+
+    // the white hiss of it collapsing and draining back
+    var h=c.createBufferSource(); h.buffer=this.noiseBuf(4,false); h.loop=true;
+    var hf=c.createBiquadFilter(); hf.type="highpass";
+    hf.frequency.setValueAtTime(1100,t);
+    hf.frequency.linearRampToValueAtTime(4200,t+rise+crash+tail*0.8);
+    var hg=c.createGain();
+    hg.gain.setValueAtTime(0.0001,t+rise*0.6);
+    hg.gain.linearRampToValueAtTime(peak*0.6,t+rise+crash+0.1);
+    hg.gain.exponentialRampToValueAtTime(0.0001,t+rise+crash+tail);
+    h.connect(hf); hf.connect(hg); hg.connect(dest);
+    h.start(t+rise*0.6); h.stop(t+rise+crash+tail+0.2);
+  },
+
+  // --- one-shots -------------------------------------------------
+  gull:function(){
+    if(!this.ready||!this.ambOn) return;
+    var c=this.ctx, t=c.currentTime;
+    for(var k=0;k<3;k++){
+      var s=t+k*0.19;
+      var o=c.createOscillator(); o.type="sawtooth";
+      var g=c.createGain(), f=c.createBiquadFilter();
+      f.type="bandpass"; f.frequency.value=1750; f.Q.value=5;
+      o.frequency.setValueAtTime(1250-k*90,s);
+      o.frequency.exponentialRampToValueAtTime(640-k*40,s+0.15);
+      g.gain.setValueAtTime(0.0001,s);
+      g.gain.exponentialRampToValueAtTime(0.05,s+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,s+0.17);
+      o.connect(f); f.connect(g); g.connect(this.ambGain);
+      o.start(s); o.stop(s+0.2);
+    }
+  },
+  horn:function(){
+    if(!this.ready||!this.ambOn) return;
+    var c=this.ctx, t=c.currentTime, self=this;
+    [0,1.35].forEach(function(off,idx){
+      var s=t+off, dur=idx?1.15:0.85;
+      var g=c.createGain();
+      g.gain.setValueAtTime(0.0001,s);
+      g.gain.exponentialRampToValueAtTime(0.085,s+0.18);
+      g.gain.setValueAtTime(0.085,s+dur*0.6);
+      g.gain.exponentialRampToValueAtTime(0.0001,s+dur);
+      var f=c.createBiquadFilter(); f.type="lowpass"; f.frequency.value=420;
+      [92,93.6,138].forEach(function(hz){
+        var o=c.createOscillator(); o.type="sawtooth"; o.frequency.value=hz;
+        o.connect(f); o.start(s); o.stop(s+dur+0.05);
+      });
+      f.connect(g); g.connect(self.ambGain);
+    });
+  },
+  plop:function(power){
+    if(!this.ready||!this.ambOn) return;
+    var c=this.ctx, t=c.currentTime;
+    var o=c.createOscillator(); o.type="sine";
+    var g=c.createGain();
+    var f0=340+power*260;
+    o.frequency.setValueAtTime(f0,t);
+    o.frequency.exponentialRampToValueAtTime(f0*0.45,t+0.08);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.07,t+0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.13);
+    o.connect(g); g.connect(this.ambGain); o.start(t); o.stop(t+0.15);
+
+    var n=c.createBufferSource(); n.buffer=this.noiseBuf(0.1,false);
+    var nf=c.createBiquadFilter(); nf.type="highpass"; nf.frequency.value=2600;
+    var ng=c.createGain();
+    ng.gain.setValueAtTime(0.035,t);
+    ng.gain.exponentialRampToValueAtTime(0.0001,t+0.09);
+    n.connect(nf); nf.connect(ng); ng.connect(this.ambGain); n.start(t);
+  },
+  whaleBlow:function(){
+    if(!this.ready||!this.ambOn) return;
+    var c=this.ctx,t=c.currentTime;
+    var n=c.createBufferSource(); n.buffer=this.noiseBuf(2.2,false);
+    var f=c.createBiquadFilter(); f.type="bandpass";
+    f.frequency.setValueAtTime(430,t);
+    f.frequency.exponentialRampToValueAtTime(1500,t+0.28);
+    f.frequency.exponentialRampToValueAtTime(300,t+1.5);
+    f.Q.value=1.1;
+    var g=c.createGain();
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.06,t+0.10);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+1.7);
+    n.connect(f); f.connect(g); g.connect(this.ambGain); n.start(t);
+  },
+  squeak:function(){
+    if(!this.ready||!this.ambOn) return;
+    var c=this.ctx,t=c.currentTime;
+    for(var k=0;k<2;k++){
+      var st=t+k*0.11;
+      var o=c.createOscillator(); o.type="sawtooth";
+      var f=c.createBiquadFilter(); f.type="bandpass"; f.frequency.value=2300; f.Q.value=6;
+      var g=c.createGain();
+      o.frequency.setValueAtTime(1650,st);
+      o.frequency.exponentialRampToValueAtTime(900,st+0.11);
+      g.gain.setValueAtTime(0.0001,st);
+      g.gain.exponentialRampToValueAtTime(0.055,st+0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001,st+0.13);
+      o.connect(f); f.connect(g); g.connect(this.ambGain);
+      o.start(st); o.stop(st+0.15);
+    }
+  },
+  bell:function(){
+    if(!this.ready||!this.ambOn) return;
+    var c=this.ctx,t=c.currentTime;
+    for(var k=0;k<2;k++){
+      var st=t+k*0.42;
+      var f=[523.3,784.0,1046.5,1318.5];
+      for(var i=0;i<f.length;i++){
+        var o=c.createOscillator(); o.type="sine"; o.frequency.value=f[i]*(1+(Math.random()-0.5)*0.004);
+        var g=c.createGain();
+        var v=(0.020/(i+1))*(k?0.6:1);
+        g.gain.setValueAtTime(0.0001,st);
+        g.gain.exponentialRampToValueAtTime(v,st+0.004);
+        g.gain.exponentialRampToValueAtTime(0.0001,st+2.2/(1+i*0.5));
+        o.connect(g); g.connect(this.ambGain);
+        o.start(st); o.stop(st+2.4);
+      }
+    }
+  },
+  splash:function(){
+    if(!this.ready||!this.ambOn) return;
+    var c=this.ctx,t=c.currentTime;
+    var n=c.createBufferSource(); n.buffer=this.noiseBuf(0.5,false);
+    var f=c.createBiquadFilter(); f.type="bandpass"; f.frequency.setValueAtTime(900,t);
+    f.frequency.exponentialRampToValueAtTime(3600,t+0.25); f.Q.value=0.6;
+    var g=c.createGain();
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.075,t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.42);
+    n.connect(f); f.connect(g); g.connect(this.ambGain); n.start(t);
+  },
+  sink:function(power){
+    if(!this.ready||!this.ambOn) return;
+    var c=this.ctx,t=c.currentTime,p=Math.max(0.2,Math.min(1.35,power||0.6));
+    // the low thud of the cavity collapsing
+    var o=c.createOscillator(); o.type="sine";
+    var f0=250-p*90;
+    o.frequency.setValueAtTime(f0*2.1,t);
+    o.frequency.exponentialRampToValueAtTime(f0*0.55,t+0.12+p*0.06);
+    var g=c.createGain();
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.085*p,t+0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.24+p*0.12);
+    o.connect(g); g.connect(this.ambGain); o.start(t); o.stop(t+0.4);
+    // the spray coming back down
+    var n=c.createBufferSource(); n.buffer=this.noiseBuf(0.6,false);
+    var nf=c.createBiquadFilter(); nf.type="bandpass";
+    nf.frequency.setValueAtTime(1500,t);
+    nf.frequency.exponentialRampToValueAtTime(4200,t+0.3);
+    nf.Q.value=0.7;
+    var ng=c.createGain();
+    ng.gain.setValueAtTime(0.0001,t+0.04);
+    ng.gain.exponentialRampToValueAtTime(0.05*p,t+0.09);
+    ng.gain.exponentialRampToValueAtTime(0.0001,t+0.34+p*0.2);
+    n.connect(nf); nf.connect(ng); ng.connect(this.ambGain); n.start(t);
+  },
+  chime:function(midi){
+    if(!this.ready) return;
+    var c=this.ctx, t=c.currentTime;
+    var o=c.createOscillator(); o.type="sine"; o.frequency.value=440*Math.pow(2,(midi-69)/12);
+    var o2=c.createOscillator(); o2.type="sine"; o2.frequency.value=440*Math.pow(2,(midi+12-69)/12);
+    var g=c.createGain(), g2=c.createGain();
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.06,t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+1.5);
+    g2.gain.setValueAtTime(0.0001,t); g2.gain.exponentialRampToValueAtTime(0.022,t+0.01);
+    g2.gain.exponentialRampToValueAtTime(0.0001,t+0.8);
+    o.connect(g); o2.connect(g2); g.connect(this.master); g2.connect(this.master);
+    o.start(t); o.stop(t+1.6); o2.start(t); o2.stop(t+0.9);
+  }
+};
+
+// ===================================================================
+// LO-FI — a generator, not a recording. Endless, never quite repeats.
+// ===================================================================
+var Lofi = {
+  on:false, timer:null, bar:0, next:0, bpm:74, key:0,
+  // ii - V - I - vi in seventh chords, the comfortable one
+  prog:[[2,5,9,12],[7,11,14,17],[0,4,7,11],[9,12,16,19]],
+  penta:[0,2,4,7,9],
+  melodyPos:4, lastNote:0,
+
+  start:function(){
+    if(!Snd.boot()||this.on) return;
+    var c=Snd.ctx;
+    this.key = [0,2,3,5,7][Math.floor(Math.random()*5)];
+    this.bpm = 68+Math.floor(Math.random()*12);
+    this.bar=0; this.next=c.currentTime+0.12;
+    var t=c.currentTime;
+    Snd.musGain.gain.cancelScheduledValues(t);
+    Snd.musGain.gain.setValueAtTime(0.0001,t);
+    Snd.musGain.gain.linearRampToValueAtTime(0.42,t+3);
+    // duck the sea so the music has somewhere to sit, without losing it
+    if(Snd.ambOn){
+      Snd.ambGain.gain.cancelScheduledValues(t);
+      Snd.ambGain.gain.setValueAtTime(Snd.ambGain.gain.value,t);
+      Snd.ambGain.gain.linearRampToValueAtTime(0.46,t+2.5);
+    }
+    this.on=true;
+    var self=this;
+    this.timer=setInterval(function(){self.tick()},40);
+    this.startCrackle();
+  },
+  stop:function(){
+    if(!this.on) return;
+    this.on=false;
+    clearInterval(this.timer); this.timer=null;
+    var t=Snd.ctx.currentTime;
+    Snd.musGain.gain.cancelScheduledValues(t);
+    Snd.musGain.gain.setValueAtTime(Snd.musGain.gain.value,t);
+    Snd.musGain.gain.linearRampToValueAtTime(0.0001,t+1.6);
+    if(Snd.ambOn){
+      Snd.ambGain.gain.cancelScheduledValues(t);
+      Snd.ambGain.gain.setValueAtTime(Snd.ambGain.gain.value,t);
+      Snd.ambGain.gain.linearRampToValueAtTime(0.9,t+2.0);
+    }
+    if(this.crackle){ try{this.crackle.stop(t+1.7)}catch(e){} this.crackle=null }
+  },
+
+  startCrackle:function(){
+    var c=Snd.ctx, n=Math.floor(c.sampleRate*4);
+    var b=c.createBuffer(1,n,c.sampleRate), d=b.getChannelData(0);
+    for(var i=0;i<n;i++){
+      d[i] = Math.random()<0.00035 ? (Math.random()*2-1)*0.8 : (Math.random()*2-1)*0.006;
+    }
+    var s=c.createBufferSource(); s.buffer=b; s.loop=true;
+    var f=c.createBiquadFilter(); f.type="bandpass"; f.frequency.value=3400; f.Q.value=0.7;
+    var g=c.createGain(); g.gain.value=0.085;
+    s.connect(f); f.connect(g); g.connect(Snd.musGain); s.start();
+    this.crackle=s;
+  },
+
+  freq:function(m){ return 440*Math.pow(2,(m-69)/12) },
+
+  voice:function(midi,t,dur,type,vol,cut){
+    var c=Snd.ctx;
+    var o=c.createOscillator(); o.type=type||"sine"; o.frequency.value=this.freq(midi);
+    var f=c.createBiquadFilter(); f.type="lowpass"; f.frequency.value=cut||1100; f.Q.value=0.4;
+    var g=c.createGain();
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(f); f.connect(g); g.connect(Snd.musGain);
+    o.start(t); o.stop(t+dur+0.05);
+  },
+  rhodes:function(midi,t,dur,vol){
+    var c=Snd.ctx;
+    var car=c.createOscillator(); car.type="sine"; car.frequency.value=this.freq(midi);
+    var mod=c.createOscillator(); mod.type="sine"; mod.frequency.value=this.freq(midi)*2.01;
+    var mg=c.createGain(); mg.gain.setValueAtTime(this.freq(midi)*1.4,t);
+    mg.gain.exponentialRampToValueAtTime(1,t+0.35);
+    mod.connect(mg); mg.connect(car.frequency);
+    var g=c.createGain();
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol,t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    var f=c.createBiquadFilter(); f.type="lowpass"; f.frequency.value=2200;
+    car.connect(f); f.connect(g); g.connect(Snd.musGain);
+    car.start(t); car.stop(t+dur+0.05); mod.start(t); mod.stop(t+dur+0.05);
+  },
+  kick:function(t){
+    var c=Snd.ctx;
+    var o=c.createOscillator(); o.type="sine";
+    o.frequency.setValueAtTime(118,t);
+    o.frequency.exponentialRampToValueAtTime(42,t+0.11);
+    var g=c.createGain();
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.26,t+0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.3);
+    o.connect(g); g.connect(Snd.musGain); o.start(t); o.stop(t+0.32);
+  },
+  snare:function(t,soft){
+    var c=Snd.ctx;
+    var n=c.createBufferSource(); n.buffer=Snd.noiseBuf(0.2,false);
+    var f=c.createBiquadFilter(); f.type="bandpass"; f.frequency.value=1750; f.Q.value=0.8;
+    var g=c.createGain();
+    g.gain.setValueAtTime(soft?0.035:0.075,t);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+(soft?0.08:0.16));
+    n.connect(f); f.connect(g); g.connect(Snd.musGain); n.start(t);
+  },
+  hat:function(t,vol){
+    var c=Snd.ctx;
+    var n=c.createBufferSource(); n.buffer=Snd.noiseBuf(0.06,false);
+    var f=c.createBiquadFilter(); f.type="highpass"; f.frequency.value=7800;
+    var g=c.createGain();
+    g.gain.setValueAtTime(vol,t);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.045);
+    n.connect(f); f.connect(g); g.connect(Snd.musGain); n.start(t);
+  },
+
+  tick:function(){
+    if(!this.on) return;
+    var c=Snd.ctx;
+    while(this.next < c.currentTime+0.4){
+      this.scheduleBar(this.next);
+      this.next += (60/this.bpm)*4;
+    }
+  },
+
+  scheduleBar:function(t){
+    var beat=60/this.bpm, ch=this.prog[this.bar%this.prog.length], k=this.key;
+    var swing=beat*0.16;
+
+    // bass on 1 and the and-of-3
+    this.voice(ch[0]+36+k, t, beat*1.6, "sine", 0.19, 320);
+    if(this.bar%2===0) this.voice(ch[0]+36+k, t+beat*2.5, beat*1.1, "sine", 0.14, 320);
+
+    // pad
+    for(var i=0;i<ch.length;i++)
+      this.voice(ch[i]+60+k, t+0.01*i, beat*3.7, "triangle", 0.030, 950);
+
+    // rhodes comp on the off-beats
+    var comp=[1.5,2.5,3.5];
+    for(var j=0;j<comp.length;j++){
+      if(Math.random()<0.78){
+        var note=ch[1+Math.floor(Math.random()*(ch.length-1))]+60+k;
+        this.rhodes(note, t+beat*comp[j]+swing, beat*0.9, 0.055);
+      }
+    }
+
+    // drums, swung
+    this.kick(t);
+    if(Math.random()<0.5) this.kick(t+beat*2.5);
+    this.snare(t+beat*2);
+    if(Math.random()<0.35) this.snare(t+beat*3.75,true);
+    for(var h=0;h<8;h++){
+      var off = (h%2) ? swing : 0;
+      this.hat(t+beat*h*0.5+off, (h%2)?0.010:0.019);
+    }
+
+    // melody: sparse pentatonic wander, rests on purpose
+    if(Math.random()<0.72){
+      var slots=[0,1,1.5,2,3,3.5];
+      var count=1+Math.floor(Math.random()*3);
+      for(var m=0;m<count;m++){
+        if(Math.random()<0.4) continue;
+        var s=slots[Math.floor(Math.random()*slots.length)];
+        this.melodyPos += Math.floor(Math.random()*3)-1;
+        if(this.melodyPos<0) this.melodyPos=1;
+        if(this.melodyPos>8) this.melodyPos=7;
+        var deg=this.penta[this.melodyPos%5], oct=Math.floor(this.melodyPos/5);
+        this.rhodes(72+k+deg+oct*12, t+beat*s+((s%1)?swing:0), beat*0.8, 0.048);
+      }
+    }
+    this.bar++;
+  }
+};
+
+// ===================================================================
+// NOCTURNE — an original piece for the dark hours. Written from scratch:
+// a slow natural-minor lament in the register of an old lantern-lit song,
+// but its own melody. Nothing borrowed, so nothing to license.
+// ===================================================================
+var Nocturne = {
+  on:false, timer:null, bar:0, next:0, bpm:54, key:9, phraseStep:0,
+  // i - VI - III - VII, the walking minor cadence
+  prog:[[0,3,7,10],[8,12,15,19],[3,7,10,14],[10,14,17,20]],
+  scale:[0,2,3,5,7,8,10],          // natural minor
+  // an original melodic contour: rise, hang, fall away
+  motif:[[0,4,2],[2,4,1.5],[4,3,2],[3,2,2],[2,1,1.5],[1,0,3]],
+  mi:0,
+
+  start:function(){
+    if(!Snd.boot()||this.on) return;
+    var c=Snd.ctx, t=c.currentTime;
+    this.key=[9,7,4,2][Math.floor(Math.random()*4)];
+    this.bpm=50+Math.floor(Math.random()*10);
+    this.bar=0; this.mi=0; this.next=t+0.15;
+    Snd.musGain.gain.cancelScheduledValues(t);
+    Snd.musGain.gain.setValueAtTime(0.0001,t);
+    Snd.musGain.gain.linearRampToValueAtTime(0.40,t+4);
+    if(Snd.ambOn){
+      Snd.ambGain.gain.cancelScheduledValues(t);
+      Snd.ambGain.gain.setValueAtTime(Snd.ambGain.gain.value,t);
+      Snd.ambGain.gain.linearRampToValueAtTime(0.52,t+3);
+    }
+    this.on=true;
+    var self=this;
+    this.timer=setInterval(function(){self.tick()},45);
+  },
+  stop:function(){
+    if(!this.on) return;
+    this.on=false;
+    clearInterval(this.timer); this.timer=null;
+    var t=Snd.ctx.currentTime;
+    Snd.musGain.gain.cancelScheduledValues(t);
+    Snd.musGain.gain.setValueAtTime(Snd.musGain.gain.value,t);
+    Snd.musGain.gain.linearRampToValueAtTime(0.0001,t+2.4);
+    if(Snd.ambOn){
+      Snd.ambGain.gain.cancelScheduledValues(t);
+      Snd.ambGain.gain.setValueAtTime(Snd.ambGain.gain.value,t);
+      Snd.ambGain.gain.linearRampToValueAtTime(0.9,t+2.6);
+    }
+  },
+  freq:function(m){ return 440*Math.pow(2,(m-69)/12) },
+
+  // a soft plucked voice, somewhere between a guitar and a music box
+  pluck:function(midi,t,dur,vol){
+    var c=Snd.ctx;
+    var o=c.createOscillator(); o.type="triangle"; o.frequency.value=this.freq(midi);
+    var o2=c.createOscillator(); o2.type="sine";
+    o2.frequency.value=this.freq(midi)*2.002;
+    var f=c.createBiquadFilter(); f.type="lowpass";
+    f.frequency.setValueAtTime(2600,t);
+    f.frequency.exponentialRampToValueAtTime(620,t+dur*0.8);
+    var g=c.createGain(), g2=c.createGain();
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol,t+0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    g2.gain.setValueAtTime(0.0001,t);
+    g2.gain.exponentialRampToValueAtTime(vol*0.3,t+0.01);
+    g2.gain.exponentialRampToValueAtTime(0.0001,t+dur*0.45);
+    o.connect(f); f.connect(g); g.connect(Snd.musGain);
+    o2.connect(g2); g2.connect(Snd.musGain);
+    o.start(t); o.stop(t+dur+0.05); o2.start(t); o2.stop(t+dur*0.5+0.05);
+  },
+  bowed:function(midi,t,dur,vol){
+    var c=Snd.ctx;
+    var o=c.createOscillator(); o.type="sawtooth"; o.frequency.value=this.freq(midi);
+    var d=c.createOscillator(); d.type="sawtooth";
+    d.frequency.value=this.freq(midi)*1.004;
+    var f=c.createBiquadFilter(); f.type="lowpass"; f.frequency.value=560; f.Q.value=0.7;
+    var g=c.createGain();
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.linearRampToValueAtTime(vol,t+dur*0.35);
+    g.gain.linearRampToValueAtTime(vol*0.8,t+dur*0.7);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(f); d.connect(f); f.connect(g); g.connect(Snd.musGain);
+    o.start(t); o.stop(t+dur+0.05); d.start(t); d.stop(t+dur+0.05);
+  },
+
+  tick:function(){
+    if(!this.on) return;
+    var c=Snd.ctx;
+    while(this.next < c.currentTime+0.5){
+      this.scheduleBar(this.next);
+      this.next += (60/this.bpm)*4;
+    }
+  },
+  scheduleBar:function(t){
+    var beat=60/this.bpm, ch=this.prog[this.bar%4], k=this.key;
+    // low bowed root, held right through the bar
+    this.bowed(ch[0]+36+k, t, beat*3.9, 0.075);
+    this.bowed(ch[0]+48+k, t+0.04, beat*3.7, 0.030);
+    // the chord, arpeggiated slowly upward like a hand moving over strings
+    for(var i=0;i<ch.length;i++)
+      this.pluck(ch[i]+60+k, t+beat*i*0.42, beat*2.3, 0.052-i*0.004);
+    // the melody: works through the motif, one phrase per bar, with air
+    if(this.bar%2===0 || Math.random()<0.6){
+      var m=this.motif[this.mi%this.motif.length];
+      this.mi++;
+      var deg=this.scale[m[0]%7], oct=Math.floor(m[0]/7)*12;
+      this.pluck(72+k+deg+oct, t+beat*(m[1]*0.5), beat*m[2], 0.062);
+      if(Math.random()<0.45){
+        var d2=this.scale[(m[0]+2)%7];
+        this.pluck(72+k+d2+oct, t+beat*(m[1]*0.5+0.75), beat*1.2, 0.038);
+      }
+    }
+    this.bar++;
+  }
+};
+
+// ===================================================================
+// STARS
+// ===================================================================
+var STARS=[
+  ["Polaris",2.530,89.264,1.98],["Kochab",14.845,74.156,2.08],["Pherkad",15.345,71.834,3.05],
+  ["Yildun",17.537,86.586,4.36],["Epsilon UMi",16.766,82.037,4.23],["Zeta UMi",15.734,77.794,4.32],
+  ["Eta UMi",16.291,75.755,4.95],
+  ["Dubhe",11.062,61.751,1.79],["Merak",11.031,56.383,2.37],["Phecda",11.897,53.695,2.44],
+  ["Megrez",12.257,57.033,3.31],["Alioth",12.900,55.960,1.77],["Mizar",13.399,54.925,2.27],
+  ["Alkaid",13.792,49.313,1.86],
+  ["Schedar",0.675,56.537,2.24],["Caph",0.153,59.150,2.28],["Gamma Cas",0.945,60.717,2.47],
+  ["Ruchbah",1.430,60.235,2.68],["Segin",1.907,63.670,3.35],
+  ["Deneb",20.690,45.280,1.25],["Sadr",20.370,40.257,2.23],["Aljanah",20.770,33.970,2.48],
+  ["Fawaris",19.750,45.131,2.87],["Albireo",19.512,27.960,3.05],
+  ["Vega",18.615,38.784,0.03],["Sheliak",18.834,33.363,3.52],["Sulafat",18.982,32.690,3.25],
+  ["Zeta Lyrae",18.746,37.605,4.36],["Delta Lyrae",18.910,36.899,4.30],
+  ["Altair",19.846,8.868,0.76],["Tarazed",19.771,10.613,2.72],["Alshain",19.922,6.407,3.71],
+  ["Delta Aquilae",19.425,3.115,3.36],["Theta Aquilae",20.188,-0.821,3.24],
+  ["Arcturus",14.261,19.182,-0.05],["Izar",14.750,27.074,2.35],["Seginus",14.535,38.308,3.03],
+  ["Nekkar",15.032,40.390,3.49],["Muphrid",13.911,18.398,2.68],
+  ["Alphecca",15.578,26.715,2.22],["Nusakan",15.464,29.106,3.66],
+  ["Theta CrB",15.548,31.359,4.14],["Gamma CrB",15.712,26.296,3.84],
+  ["Antares",16.490,-26.432,1.06],["Dschubba",16.005,-22.622,2.29],["Acrab",16.090,-19.805,2.62],
+  ["Sargas",17.622,-42.998,1.86],["Shaula",17.560,-37.104,1.62],
+  ["Markab",23.079,15.205,2.48],["Scheat",23.063,28.083,2.42],["Algenib",0.221,15.184,2.83],
+  ["Alpheratz",0.140,29.091,2.06],
+  ["Mirach",1.162,35.621,2.06],["Almach",2.065,42.330,2.10],["Delta And",0.655,30.861,3.27],
+  ["Mirfak",3.405,49.861,1.79],["Algol",3.136,40.956,2.12],
+  ["Eltanin",17.943,51.489,2.23],["Rastaban",17.507,52.301,2.79],["Thuban",14.073,64.376,3.65],
+
+  // ---- southern and equatorial, so the sky works below the equator too ----
+  ["Sirius",6.752,-16.716,-1.46],["Mirzam",6.378,-17.956,1.98],
+  ["Adhara",6.977,-28.972,1.50],["Wezen",7.140,-26.393,1.83],
+  ["Canopus",6.399,-52.696,-0.74],["Achernar",1.629,-57.237,0.46],
+  ["Rigil Kentaurus",14.660,-60.834,-0.27],["Hadar",14.064,-60.373,0.61],
+  ["Acrux",12.443,-63.099,0.77],["Mimosa",12.795,-59.689,1.25],
+  ["Gacrux",12.519,-57.113,1.63],["Imai",12.253,-58.749,2.79],
+  ["Rigel",5.242,-8.202,0.13],["Betelgeuse",5.919,7.407,0.50],
+  ["Bellatrix",5.418,6.350,1.64],["Saiph",5.796,-9.670,2.06],
+  ["Alnitak",5.679,-1.943,1.77],["Alnilam",5.604,-1.202,1.69],
+  ["Mintaka",5.533,-0.299,2.23],
+  ["Procyon",7.655,5.225,0.34],["Aldebaran",4.599,16.509,0.85],
+  ["Spica",13.420,-11.161,0.97],["Fomalhaut",22.961,-29.622,1.16],
+  ["Regulus",10.140,11.967,1.35],["Denebola",11.818,14.572,2.11],
+  ["Algieba",10.333,19.841,2.28],["Zosma",11.235,20.524,2.56],
+  ["Pollux",7.755,28.026,1.14],["Castor",7.577,31.888,1.58],
+  ["Capella",5.278,45.998,0.08],["Elnath",5.438,28.608,1.65]
+];
+function si(n){for(var i=0;i<STARS.length;i++) if(STARS[i][0]===n) return i; return -1}
+
+var FIGURES=[
+  {name:"the Plough",stars:["Dubhe","Merak","Phecda","Megrez","Alioth","Mizar","Alkaid"],
+   lines:[["Dubhe","Merak"],["Merak","Phecda"],["Phecda","Megrez"],["Megrez","Dubhe"],
+          ["Megrez","Alioth"],["Alioth","Mizar"],["Mizar","Alkaid"]]},
+  {name:"Cassiopeia",stars:["Caph","Schedar","Gamma Cas","Ruchbah","Segin"],
+   lines:[["Caph","Schedar"],["Schedar","Gamma Cas"],["Gamma Cas","Ruchbah"],["Ruchbah","Segin"]]},
+  {name:"the Little Bear",stars:["Polaris","Yildun","Epsilon UMi","Zeta UMi","Eta UMi","Pherkad","Kochab"],
+   lines:[["Polaris","Yildun"],["Yildun","Epsilon UMi"],["Epsilon UMi","Zeta UMi"],
+          ["Zeta UMi","Kochab"],["Kochab","Pherkad"],["Pherkad","Eta UMi"],["Eta UMi","Zeta UMi"]]},
+  {name:"the Northern Cross",stars:["Deneb","Sadr","Albireo","Aljanah","Fawaris"],
+   lines:[["Deneb","Sadr"],["Sadr","Albireo"],["Fawaris","Sadr"],["Sadr","Aljanah"]]},
+  {name:"Lyra",stars:["Vega","Zeta Lyrae","Delta Lyrae","Sulafat","Sheliak"],
+   lines:[["Vega","Zeta Lyrae"],["Zeta Lyrae","Delta Lyrae"],["Delta Lyrae","Sulafat"],
+          ["Sulafat","Sheliak"],["Sheliak","Zeta Lyrae"]]},
+  {name:"Aquila",stars:["Altair","Tarazed","Alshain","Delta Aquilae","Theta Aquilae"],
+   lines:[["Tarazed","Altair"],["Altair","Alshain"],["Altair","Delta Aquilae"],["Delta Aquilae","Theta Aquilae"]]},
+  {name:"the Herdsman",stars:["Arcturus","Izar","Seginus","Nekkar","Muphrid"],
+   lines:[["Arcturus","Izar"],["Izar","Seginus"],["Seginus","Nekkar"],["Arcturus","Muphrid"]]},
+  {name:"the Northern Crown",stars:["Alphecca","Nusakan","Theta CrB","Gamma CrB"],
+   lines:[["Theta CrB","Nusakan"],["Nusakan","Alphecca"],["Alphecca","Gamma CrB"]]},
+  {name:"the Summer Triangle",stars:["Vega","Deneb","Altair"],
+   lines:[["Vega","Deneb"],["Deneb","Altair"],["Altair","Vega"]]},
+  {name:"the Great Square",stars:["Markab","Scheat","Algenib","Alpheratz"],
+   lines:[["Markab","Scheat"],["Scheat","Alpheratz"],["Alpheratz","Algenib"],["Algenib","Markab"]]},
+  {name:"Andromeda",stars:["Alpheratz","Delta And","Mirach","Almach"],
+   lines:[["Alpheratz","Delta And"],["Delta And","Mirach"],["Mirach","Almach"]]},
+  {name:"Scorpius",stars:["Dschubba","Acrab","Antares","Sargas","Shaula"],
+   lines:[["Acrab","Dschubba"],["Dschubba","Antares"],["Antares","Sargas"],["Sargas","Shaula"]]},
+  {name:"the Dragon's head",stars:["Eltanin","Rastaban","Thuban"],
+   lines:[["Eltanin","Rastaban"],["Rastaban","Thuban"]]},
+
+  // ---- visible from the whole world, or only from the south ----
+  {name:"Orion",stars:["Betelgeuse","Bellatrix","Alnitak","Alnilam","Mintaka","Saiph","Rigel"],
+   lines:[["Betelgeuse","Bellatrix"],["Betelgeuse","Alnitak"],["Bellatrix","Mintaka"],
+          ["Alnitak","Alnilam"],["Alnilam","Mintaka"],["Alnitak","Saiph"],["Mintaka","Rigel"]]},
+  {name:"the Southern Cross",stars:["Acrux","Mimosa","Gacrux","Imai"],
+   lines:[["Acrux","Gacrux"],["Mimosa","Imai"]]},
+  {name:"the Pointers",stars:["Rigil Kentaurus","Hadar"],
+   lines:[["Rigil Kentaurus","Hadar"]]},
+  {name:"Canis Major",stars:["Sirius","Mirzam","Adhara","Wezen"],
+   lines:[["Mirzam","Sirius"],["Sirius","Wezen"],["Wezen","Adhara"],["Adhara","Sirius"]]},
+  {name:"the Winter Triangle",stars:["Sirius","Betelgeuse","Procyon"],
+   lines:[["Sirius","Betelgeuse"],["Betelgeuse","Procyon"],["Procyon","Sirius"]]},
+  {name:"the Twins",stars:["Castor","Pollux"],
+   lines:[["Castor","Pollux"]]},
+  {name:"the Sickle",stars:["Regulus","Algieba","Zosma","Denebola"],
+   lines:[["Regulus","Algieba"],["Algieba","Zosma"],["Zosma","Denebola"]]}
+];
+for(var fi0=0;fi0<FIGURES.length;fi0++){
+  var Fx=FIGURES[fi0];
+  Fx.si=Fx.stars.map(si).filter(function(i){return i>=0});
+  Fx.li=Fx.lines.map(function(p){return [si(p[0]),si(p[1])]})
+                .filter(function(p){return p[0]>=0&&p[1]>=0});
+  Fx.found=store.get("tidepool.found."+Fx.name,"")==="1";
+}
+var starPos=new Float32Array(STARS.length*3);
+(function(){ var v=store.get("tidepool.view",""); if(v!=="") VIEW=parseFloat(v) })();
+
+function julian(d){
+  var y=d.getUTCFullYear(),m=d.getUTCMonth()+1;
+  if(m<=2){y--;m+=12}
+  var a=Math.floor(y/100),b=2-a+Math.floor(a/4);
+  var day=d.getUTCDate()+(d.getUTCHours()+d.getUTCMinutes()/60+d.getUTCSeconds()/3600)/24;
+  return Math.floor(365.25*(y+4716))+Math.floor(30.6001*(m+1))+day+b-1524.5;
+}
+function lstDeg(d){return (((280.46061837+360.98564736629*(julian(d)-2451545.0))%360)+360+LON)%360}
+// Relative bearing from the view centre, in degrees, -180..180.
+function relAz(az){
+  var r=az-facing();
+  while(r>180) r-=360;
+  while(r<-180) r+=360;
+  return r;
+}
+function projAz(az){ return W*(0.5+relAz(az)/FOV) }
+// You cannot see the whole sky at once. Anything more than half the field of
+// view from centre is behind you, and must be culled rather than drawn at a
+// nonsense position off the edge of the frame.
+function inView(az){ return Math.abs(relAz(az))<=FOV/2 }
+function projAlt(alt){return HORIZON-4-(alt/90)*(HORIZON-10)}
+
+function updateStars(d){
+  var L=lstDeg(d), la=LAT*RAD;
+  for(var i=0;i<STARS.length;i++){
+    var s=STARS[i];
+    var ha=((L-s[1]*15)%360+360)%360*RAD, de=s[2]*RAD;
+    var sa=Math.max(-1,Math.min(1,Math.sin(de)*Math.sin(la)+Math.cos(de)*Math.cos(la)*Math.cos(ha)));
+    var alt=Math.asin(sa)*DEG;
+    var az=(Math.atan2(-Math.sin(ha)*Math.cos(de),
+        Math.sin(de)*Math.cos(la)-Math.cos(de)*Math.sin(la)*Math.cos(ha))*DEG+360)%360;
+    starPos[i*3]=projAz(az); starPos[i*3+1]=projAlt(alt); starPos[i*3+2]=alt;
+  }
+}
+
+function solar(d){
+  var start=new Date(d.getFullYear(),0,0);
+  var doy=Math.floor((d-start)/86400000);
+  var hr=d.getHours(),mi=d.getMinutes(),se=d.getSeconds(), tz=-d.getTimezoneOffset()/60;
+  var g=(2*Math.PI/365)*(doy-1+(hr-12)/24);
+  var eq=229.18*(0.000075+0.001868*Math.cos(g)-0.032077*Math.sin(g)
+        -0.014615*Math.cos(2*g)-0.040849*Math.sin(2*g));
+  var decl=0.006918-0.399912*Math.cos(g)+0.070257*Math.sin(g)
+        -0.006758*Math.cos(2*g)+0.000907*Math.sin(2*g)
+        -0.002697*Math.cos(3*g)+0.001480*Math.sin(3*g);
+  var tst=hr*60+mi+se/60+eq+4*LON-60*tz;
+  var ha=(tst/4-180)*RAD, la=LAT*RAD;
+  var cz=Math.max(-1,Math.min(1,Math.sin(la)*Math.sin(decl)+Math.cos(la)*Math.cos(decl)*Math.cos(ha)));
+  var zen=Math.acos(cz), alt=90-zen*DEG, az=180, den=Math.sin(zen)*Math.cos(la);
+  if(Math.abs(den)>1e-6){
+    var ca=Math.max(-1,Math.min(1,(Math.sin(decl)-Math.sin(la)*cz)/den));
+    az=Math.acos(ca)*DEG; if(ha>0) az=360-az;
+  }
+  var rise=null,set=null;
+  var ch=Math.cos(90.833*RAD)/(Math.cos(la)*Math.cos(decl))-Math.tan(la)*Math.tan(decl);
+  if(ch>=-1&&ch<=1){var Hd=Math.acos(ch)*DEG; rise=720-4*(LON+Hd)-eq+tz*60; set=720-4*(LON-Hd)-eq+tz*60}
+  return {alt:alt,az:az,rise:rise,set:set};
+}
+function hhmm(m){
+  if(m===null) return "--:--";
+  m=((m%1440)+1440)%1440;
+  var h=Math.floor(m/60),n=Math.round(m%60); if(n===60){n=0;h=(h+1)%24}
+  return (h<10?"0":"")+h+":"+(n<10?"0":"")+n;
+}
+
+// ===================================================================
+// THE MOON, properly. Low-precision lunar theory (Meeus ch.47 abridged):
+// good to about a degree, which is far better than "opposite the sun".
+// ===================================================================
+var moon={alt:0, az:180, ra:0, dec:0, phase:0, lit:0, waxing:true};
+
+function updateMoon(d){
+  var T=(julian(d)-2451545.0)/36525;
+  var Lp=218.3164477+481267.88123421*T;          // mean longitude
+  var M =134.9633964+477198.8675055*T;           // mean anomaly
+  var Ms=357.5291092+35999.0502909*T;            // sun's mean anomaly
+  var F = 93.2720950+483202.0175233*T;           // argument of latitude
+  var D =297.8501921+445267.1114034*T;           // mean elongation
+  var r=RAD;
+  // the handful of terms that actually matter at this scale
+  var lon=Lp + 6.289*Math.sin(M*r)
+             + 1.274*Math.sin((2*D-M)*r)
+             + 0.658*Math.sin(2*D*r)
+             + 0.214*Math.sin(2*M*r)
+             - 0.186*Math.sin(Ms*r)
+             - 0.114*Math.sin(2*F*r);
+  var lat= 5.128*Math.sin(F*r)
+             + 0.281*Math.sin((M+F)*r)
+             - 0.278*Math.sin((F-M)*r)
+             - 0.173*Math.sin((2*D-F)*r);
+  var eps=23.4392911*r;
+  var l=lon*r, b=lat*r;
+  var ra=Math.atan2(Math.sin(l)*Math.cos(eps)-Math.tan(b)*Math.sin(eps),Math.cos(l));
+  var dec=Math.asin(Math.sin(b)*Math.cos(eps)+Math.cos(b)*Math.sin(eps)*Math.sin(l));
+  moon.ra=((ra*DEG)%360+360)%360; moon.dec=dec*DEG;
+
+  var L=lstDeg(d), la=LAT*r;
+  var ha=(((L-moon.ra)%360+360)%360)*r;
+  var sa=Math.max(-1,Math.min(1,Math.sin(dec)*Math.sin(la)+Math.cos(dec)*Math.cos(la)*Math.cos(ha)));
+  moon.alt=Math.asin(sa)*DEG;
+  moon.az=(Math.atan2(-Math.sin(ha)*Math.cos(dec),
+      Math.sin(dec)*Math.cos(la)-Math.cos(dec)*Math.sin(la)*Math.cos(ha))*DEG+360)%360;
+
+  // elongation from the sun gives the illuminated fraction directly
+  var elong=((moon.ra - (D>0?0:0)) ,0);
+  var ph=((lon - (280.46646+36000.76983*T))%360+360)%360;   // moon minus sun longitude
+  moon.phase=ph/360;                        // 0 new, .5 full
+  moon.lit=(1-Math.cos(ph*r))/2;
+  moon.waxing=ph<180;
+}
+
+// ===================================================================
+// TIDES. The Moon and Sun pull the ocean; when they line up at new and
+// full moon their pulls add and you get spring tides, when they are at
+// right angles at the quarters they partly cancel and you get neaps.
+// The cycle itself is semidiurnal: two highs and two lows per lunar day.
+// ===================================================================
+var tide={t:0, height:0, range:0.6, current:0, slack:false, rising:true, state:"Slack water"};
+
+function updateTide(d){
+  // springness: 1 when Sun, Earth and Moon are in line, 0 at the quarters
+  var springness=Math.abs(Math.cos(moon.phase*2*Math.PI));
+  tide.range=0.34+springness*0.66;
+
+  // semidiurnal period is 12h25m; anchor it to the moon's hour angle so
+  // high water tracks the Moon's passage rather than the clock
+  var L=lstDeg(d);
+  var lunarHA=(((L-moon.ra)%360+360)%360)/360;      // 0..1 per lunar day
+  tide.t=(lunarHA*2)%1;                             // two tides per lunar day
+
+  tide.height =Math.cos(tide.t*2*Math.PI)*tide.range;
+  tide.current=Math.abs(Math.sin(tide.t*2*Math.PI))*tide.range;
+  tide.rising =Math.sin(tide.t*2*Math.PI)<0;
+  tide.slack  =tide.current<0.11;
+  tide.state  = tide.slack ? (tide.height>0?"High water":"Low water")
+              : tide.rising ? "Flooding" : "Ebbing";
+}
+
+var STOPS=[
+  {a:-18,top:"#060A14",bot:"#0D1626",sea:"#0A1722",sand:"#1D2230",glow:1.00},
+  {a:-12,top:"#0B1120",bot:"#18233A",sea:"#102434",sand:"#282D3E",glow:0.96},
+  {a: -6,top:"#17203C",bot:"#42375C",sea:"#1A3348",sand:"#443E50",glow:0.78},
+  {a: -1,top:"#293156",bot:"#C07862",sea:"#2A4A5E",sand:"#75665F",glow:0.46},
+  {a:  5,top:"#3A5A88",bot:"#F2A65A",sea:"#2E5A6B",sand:"#B99A72",glow:0.18},
+  {a: 15,top:"#3F7DA6",bot:"#DCCB9C",sea:"#2C6A80",sand:"#C4AC84",glow:0.04},
+  {a: 40,top:"#3B84BE",bot:"#A9DAE2",sea:"#2E7288",sand:"#C8B18A",glow:0.00},
+  {a: 90,top:"#3B84BE",bot:"#A9DAE2",sea:"#2E7288",sand:"#C8B18A",glow:0.00}
+];
+function hx(c){return [parseInt(c.substr(1,2),16),parseInt(c.substr(3,2),16),parseInt(c.substr(5,2),16)]}
+function h2(v){v=Math.max(0,Math.min(255,Math.round(v)));return (v<16?"0":"")+v.toString(16)}
+function mix(a,b,k){var A=hx(a),B=hx(b);
+  return "#"+h2(A[0]+(B[0]-A[0])*k)+h2(A[1]+(B[1]-A[1])*k)+h2(A[2]+(B[2]-A[2])*k)}
+var sky={top:"#060A14",bot:"#0D1626",sea:"#0A1722",sand:"#1D2230",glow:1};
+function updatePalette(alt){
+  var i=0; while(i<STOPS.length-2&&alt>STOPS[i+1].a) i++;
+  var a=STOPS[i],b=STOPS[i+1],k=Math.max(0,Math.min(1,(alt-a.a)/(b.a-a.a)));
+  sky.top=mix(a.top,b.top,k); sky.bot=mix(a.bot,b.bot,k);
+  sky.sea=mix(a.sea,b.sea,k); sky.sand=mix(a.sand,b.sand,k);
+  sky.glow=a.glow+(b.glow-a.glow)*k;
+}
+
+var cv=document.getElementById("scene"), ctx=cv.getContext("2d",{alpha:false});
+ctx.imageSmoothingEnabled=false;
+
+// Landmarks live at fractions of the width, so an ultrawide monitor gets more
+// coastline rather than a vertical crop of the same picture.
+var LM={};
+function layout(){
+  var aspect=(window.innerWidth||1920)/(window.innerHeight||1080);
+  var want=Math.round(H*aspect);
+  W=Math.max(510,Math.min(1180,want));
+  if(W%2) W++;
+  cv.width=W; cv.height=H;
+  ctx.imageSmoothingEnabled=false;
+
+  LM.pier   = 52;
+  LM.island = W-30;
+  LM.cinema = W-152;
+  LM.buoy   = Math.round(W*0.60);
+  LM.walkMin= 62;
+  LM.walkMax= W-88;
+
+  SCR.x=LM.cinema; SCR.y=EDGE-62;
+  buoy.x=LM.buoy;
+  surfSpots[0].x=34;
+  surfSpots[1].x=LM.island;
+  if(walker.x>LM.walkMax) walker.x=LM.walkMax;
+  if(walker.x<LM.walkMin) walker.x=LM.walkMin;
+
+  // re-seed clouds across the new width
+  for(var i=0;i<clouds.length;i++) if(clouds[i].x>W) clouds[i].x=Math.random()*W;
+
+  uiScale();
+  placePanels();
+}
+var reduced=matchMedia("(prefers-reduced-motion: reduce)").matches;
+var sun={alt:20,az:180,rise:null,set:null}, level=0;
+
+// tiny 3x5 pixel digits, for the score pops
+var GLYPH={
+  "0":[7,5,5,5,7],"1":[2,6,2,2,7],"2":[7,1,7,4,7],"3":[7,1,7,1,7],"4":[5,5,7,1,1],
+  "5":[7,4,7,1,7],"6":[7,4,7,5,7],"7":[7,1,2,2,2],"8":[7,5,7,5,7],"9":[7,5,7,1,7],
+  "x":[0,5,2,5,0],"!":[2,2,2,0,2]
+};
+function pixText(s,x,y,col){
+  ctx.fillStyle=col;
+  for(var i=0;i<s.length;i++){
+    var gl=GLYPH[s[i]]; if(!gl){x+=4;continue}
+    for(var r=0;r<5;r++)
+      for(var c=0;c<3;c++)
+        if(gl[r]&(1<<(2-c))) ctx.fillRect(x+c,y+r,1,1);
+    x+=4;
+  }
+}
+
+var toastBox=document.getElementById("toasts");
+function toast(html,ms){
+  var el=document.createElement("div"); el.className="toast"; el.innerHTML=html;
+  toastBox.appendChild(el);
+  requestAnimationFrame(function(){el.classList.add("in")});
+  setTimeout(function(){el.classList.remove("in");
+    setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el)},600)},ms||5200);
+}
+
+// ===================================================================
+// WORLD
+// ===================================================================
+var ships=[],gulls=[],clouds=[],fireflies=[],meteors=[],pops=[];
+var lightPhase=0, bird=null, idleSec=0, breakDue=false;
+
+for(var ci=0;ci<7;ci++) clouds.push({x:Math.random()*W,y:16+Math.random()*66,
+  w:34+Math.random()*72,h:6+Math.random()*9,v:0.9+Math.random()*2.2,o:0.05+Math.random()*0.11});
+
+// depth 0 = far out on the horizon, 1 = close inshore.
+// Everything about a vessel follows from it: how far down the screen it sits,
+// how big it is, and how fast it appears to move.
+function spawnShip(kindForce, depthForce){
+  var dir=Math.random()<0.5?1:-1;
+  var day = sky.glow<0.3;
+  // By day: sail and fishing boats inshore, freight on the far horizon.
+  // At night nobody fishes, so it is freight and the occasional late motor boat.
+  var kind = kindForce || (day
+      ? (Math.random()<0.42?"sail":(Math.random()<0.55?"fisher":(Math.random()<0.55?"small":"big")))
+      : (Math.random()<0.62?"big":"small"));
+  // Freight is enormous and always far out — never inshore. Sail and fishing
+  // boats work the near water. This is the whole of the perspective illusion.
+  var depth = depthForce!==undefined ? depthForce
+            : (kind==="big"    ? Math.random()*0.09
+            :  kind==="fisher" ? 0.50+Math.random()*0.42
+            :  kind==="sail"   ? 0.34+Math.random()*0.46
+            :                    0.26+Math.random()*0.40);
+  var sc = 0.42+depth*1.25;
+  if(kind==="big") sc=0.30+depth*0.9;
+  ships.push({
+    x: dir>0 ? -80 : W+80, dir:dir, depth:depth, sc:sc,
+    y: HORIZON-4+depth*Math.max(10,(EDGE-HORIZON)*0.62),
+    len: Math.max(6,(kind==="big"?92:(kind==="sail"?15:(kind==="fisher"?17:20)))*sc),
+    tall: Math.max(3,(kind==="big"?13:(kind==="sail"?17:(kind==="fisher"?7:6)))*sc),
+    kind:kind, big:kind==="big",
+    v:(kind==="sail"?1.0+Math.random()*1.2:(kind==="fisher"?1.6+Math.random()*1.4:2.2+Math.random()*2.6))*(0.45+depth*1.3)*dir,
+    heel:(Math.random()<0.5?-1:1), horned:false, wake:0,
+    errand: kind==="fisher" && Math.random()<0.6, phase:"run", wait:0,
+    flick:Math.random()*6.28
+  });
+}
+function spawnGull(){
+  var dir=Math.random()<0.5?1:-1;
+  gulls.push({x:dir>0?-14:W+14, y:34+Math.random()*68, dir:dir,
+    v:(15+Math.random()*19)*dir, p:Math.random()*6.28, cried:false,
+    state:"glide", dtimer:2.5+Math.random()*7, home:0, glide:Math.random()<0.45});
+}
+function spawnMeteor(){
+  meteors.push({x:40+Math.random()*(W-80),y:8+Math.random()*56,
+    vx:40+Math.random()*48,vy:17+Math.random()*23,life:1});
+}
+function spawnFirefly(){
+  fireflies.push({x:24+Math.random()*90,y:GROUND-40+Math.random()*30,
+    vx:(Math.random()-.5)*6,vy:(Math.random()-.5)*5,p:Math.random()*6.28,life:4+Math.random()*8});
+}
+function pop(x,y,txt,col){ pops.push({x:x,y:y,t:txt,life:1,col:col||"#FFD97D"}) }
+
+var timers={ship:5,gull:3,meteor:24,fly:.6,wave:2.5,crab:6,pod:18,whale:420};
+
+// Waves breaking against the headland and the island. Each has its own
+// rhythm so the two never pulse together.
+var surfSpots=[
+  {x:34, y:HORIZON+4, w:66, p:0.0, per:9.4, seed:0.0, mag:0.7, sounded:false},
+  {x:452,y:HORIZON+2, w:44, p:4.7, per:13.1,seed:1.9, mag:0.5, sounded:false}
+];
+var crabs=[], wakes=[], pods=[], whale=null, bottle=null, beachProps=null, prints=[];
+var farLights=[], bioNight=false, bioBloom=0;
+var wind={base:0.5, gust:0, phase:0, val:0.5};
+var buoy={x:286, bob:0, bell:11, flash:0};
+var SCRdefault=352;
+var washPhase=0, washStrength=0.5;
+
+function stepWorld(dt){
+  var night=sky.glow>0.55, day=sky.glow<0.25;
+
+  for(var i=0;i<clouds.length;i++){
+    var c=clouds[i]; c.x+=c.v*dt*(reduced?0:(0.5+wind.val*0.85));
+    if(c.x-c.w>W){c.x=-c.w;c.y=16+Math.random()*66}
+  }
+
+  timers.ship-=dt;
+  if(timers.ship<=0){ if(ships.length<3) spawnShip(); timers.ship=34+Math.random()*46 }
+  for(var s=ships.length-1;s>=0;s--){
+    var S=ships[s];
+    if(S.errand){
+      // a fishing boat with somewhere to be: out to the island, sit a while,
+      // then home again
+      if(S.phase==="run"){
+        S.x+=S.v*dt;
+        if((S.dir>0&&S.x>=LM.island-24)||(S.dir<0&&S.x<=LM.island+24)){
+          S.phase="moored"; S.wait=14+Math.random()*26;
+        }
+      } else if(S.phase==="moored"){
+        S.wait-=dt;
+        S.x+=Math.sin(washPhase*1.1)*1.2*dt;
+        if(S.wait<=0){ S.phase="home"; S.dir=-S.dir; S.v=-S.v }
+      } else S.x+=S.v*dt;
+    } else S.x+=S.v*dt;
+    S.wake+=dt;
+    // a trail of disturbed water, laid down behind and slowly healing over
+    if(S.phase!=="moored" && S.wake>0.42){
+      S.wake=0;
+      wakes.push({x:S.x+(S.dir>0?-S.len*0.1:S.len*1.1), y:S.y+Math.max(2,2+S.sc*2),
+                  w:Math.max(3,S.len*0.5), life:1, depth:S.depth});
+    }
+    if(!S.horned && S.big && S.x>W*0.25 && S.x<W*0.75 && Math.random()<dt*0.30){
+      S.horned=true; Snd.horn();
+    }
+    if(S.x<-110||S.x>W+110) ships.splice(s,1);
+  }
+
+  if(day){
+    timers.gull-=dt;
+    if(timers.gull<=0){ if(gulls.length<8) spawnGull(); timers.gull=1.4+Math.random()*4.2 }
+  }
+  for(var g=gulls.length-1;g>=0;g--){
+    var G=gulls[g];
+    G.p+=dt*(G.state==="dive"?13:(G.glide?3.4:7.4));
+    if(G.state==="glide"){
+      G.x+=G.v*dt; G.y+=Math.sin(G.p*0.4)*7*dt;
+      G.dtimer-=dt;
+      if(G.dtimer<=0 && G.y<HORIZON-10 && G.x>50 && G.x<W-50){
+        G.state="dive"; G.home=HORIZON+20+Math.random()*(EDGE-HORIZON-44);
+      }
+    } else if(G.state==="dive"){
+      G.x+=G.v*dt*0.45; G.y+=210*dt;
+      if(G.y>=G.home){
+        G.state="rise";
+        ripples.push({x:G.x,y:G.home,r:0,life:1});
+        Snd.splash();
+        if(Math.random()<0.5) pop(G.x-2,G.home-12,"!","#EAF2F0");
+      }
+    } else if(G.state==="flee"){
+      G.x+=G.v*dt*2.6; G.y-=95*dt; G.p+=dt*8;
+      if(G.y<-14) gulls.splice(g,1);
+      continue;
+    } else {
+      G.x+=G.v*dt; G.y-=120*dt;
+      if(G.y<44+Math.random()*20){ G.state="glide"; G.dtimer=18+Math.random()*40 }
+    }
+    if(!G.cried && G.x>60 && G.x<W-60 && Math.random()<dt*0.55){ G.cried=true; Snd.gull() }
+    if(G.x<-26||G.x>W+26) gulls.splice(g,1);
+  }
+
+  if(night){
+    timers.meteor-=dt;
+    if(timers.meteor<=0){ spawnMeteor(); timers.meteor=20+Math.random()*70 }
+    timers.fly-=dt;
+    if(timers.fly<=0){ if(fireflies.length<16) spawnFirefly(); timers.fly=0.5+Math.random()*1.4 }
+  }
+  for(var m=meteors.length-1;m>=0;m--){
+    var M=meteors[m]; M.x+=M.vx*dt; M.y+=M.vy*dt; M.life-=dt*1.1;
+    if(M.life<=0) meteors.splice(m,1);
+  }
+  for(var q=fireflies.length-1;q>=0;q--){
+    var F=fireflies[q];
+    F.x+=F.vx*dt; F.y+=F.vy*dt; F.p+=dt*2.6; F.life-=dt;
+    F.vx+=(Math.random()-.5)*9*dt; F.vy+=(Math.random()-.5)*8*dt;
+    F.vx*=0.99; F.vy*=0.99;
+    if(F.life<=0) fireflies.splice(q,1);
+  }
+  for(var p=pops.length-1;p>=0;p--){
+    pops[p].y-=14*dt; pops[p].life-=dt*0.9;
+    if(pops[p].life<=0) pops.splice(p,1);
+  }
+
+  for(var wk=wakes.length-1;wk>=0;wk--){
+    var WK=wakes[wk];
+    WK.life-=dt*0.055; WK.w+=dt*3.2;
+    if(WK.life<=0) wakes.splice(wk,1);
+  }
+
+  // dolphins, and now and then something much larger
+  timers.pod-=dt;
+  if(timers.pod<=0 && day){
+    if(pods.length<2){
+      var dir=Math.random()<0.5?1:-1;
+      var n=2+Math.floor(Math.random()*3);
+      var depth=0.03+Math.random()*0.16;
+      var baseY=HORIZON+3+depth*30;
+      var startX=dir>0?-30:W+30;
+      for(var d=0;d<n;d++)
+        pods.push({x:startX-dir*d*13, y:baseY, dir:dir, depth:depth,
+                   v:(26+Math.random()*12)*dir, phase:Math.random()*3.14, arc:0,
+                   period:1.5+Math.random()*0.5, sc:0.55+depth*0.9, blown:false});
+    }
+    timers.pod=70+Math.random()*150;
+  }
+  for(var pd=pods.length-1;pd>=0;pd--){
+    var P=pods[pd];
+    P.x+=P.v*dt; P.phase+=dt*(6.283/P.period);
+    P.arc=Math.sin(P.phase);
+    if(P.x<-46||P.x>W+46) pods.splice(pd,1);
+  }
+
+  timers.whale-=dt;
+  if(timers.whale<=0 && !whale && day){
+    // far out, only just breaking the horizon, and genuinely rare
+    whale={x:Math.random()<0.5?-70:W+70, y:HORIZON+1+Math.random()*4,
+           dir:0, v:0, t:0, spout:0, sc:0.55};
+    whale.dir=whale.x<0?1:-1; whale.v=9*whale.dir;
+  }
+  if(timers.whale<=0) timers.whale=1500+Math.random()*2400;
+  if(whale){
+    whale.x+=whale.v*dt; whale.t+=dt;
+    var cyc=(whale.t%16)/16;
+    whale.surf = cyc<0.30 ? Math.sin(cyc/0.30*Math.PI) : 0;
+    if(cyc>0.05 && cyc<0.10 && whale.spout<=0){ whale.spout=2.6; Snd.whaleBlow() }
+    if(whale.spout>0) whale.spout-=dt;
+    if(whale.x<-90||whale.x>W+90) whale=null;
+  }
+
+  // surf pounding the rocks, on its own timing
+  for(var ss=0;ss<surfSpots.length;ss++){
+    var SP=surfSpots[ss];
+    SP.p+=dt;
+    if(SP.p>=SP.per){
+      SP.p=0; SP.per=7.5+Math.random()*11; SP.seed=Math.random()*6.28;
+      SP.mag=0.35+Math.random()*0.65; SP.sounded=false;
+    }
+    if(!SP.sounded && SP.p>0.05){
+      SP.sounded=true;
+      if(Math.random()<0.45) Snd.breakWave(0.12+Math.random()*0.22);
+    }
+  }
+
+  // the channel buoy: rides the swell, tolls now and then
+  var bl=0.45+tide.range*0.5+tide.current*0.4;
+  buoy.bob=(Math.sin(washPhase*1.3)*1.5+Math.sin(washPhase*0.7+1.2)*0.9)*bl;
+  buoy.flash=(buoy.flash+dt)%4;
+  buoy.bell-=dt;
+  if(buoy.bell<=0){ Snd.bell(); buoy.bell=22+Math.random()*40 }
+
+  // crabs on the wet sand, daylight only
+  if(day){
+    timers.crab-=dt;
+    if(timers.crab<=0){
+      if(crabs.length<4) crabs.push({x:Math.random()*W, y:EDGE+14+Math.random()*(H-EDGE-26),
+        dir:Math.random()<0.5?-1:1, state:"still", timer:1+Math.random()*2, p:0});
+      timers.crab=5+Math.random()*11;
+    }
+  } else if(crabs.length && Math.random()<dt*0.4) crabs.pop();
+  for(var cb=crabs.length-1;cb>=0;cb--){
+    var C=crabs[cb];
+    C.timer-=dt; C.p+=dt*13;
+    if(C.timer<=0){
+      C.state = C.state==="still" ? "run" : "still";
+      C.timer = C.state==="run" ? 0.3+Math.random()*0.9 : 1.2+Math.random()*3.4;
+      if(C.state==="run" && Math.random()<0.4) C.dir=-C.dir;
+    }
+    if(C.state==="run"){
+      C.x+=C.dir*23*dt;
+      if(C.x<6||C.x>W-6){ C.dir=-C.dir; C.x=Math.max(6,Math.min(W-6,C.x)) }
+    }
+  }
+
+  // waves break on an irregular rhythm, and the sound follows the picture
+  washPhase+=dt*(0.20+tide.current*0.24);
+  timers.wave-=dt;
+  if(timers.wave<=0){
+    var size=Math.random();
+    washStrength=(0.30+size*0.55)*(0.65+tide.range*0.6);
+    Snd.breakWave(size);
+    timers.wave=(4.6+Math.random()*5.4)*(tide.slack?1.5:1);
+  }
+
+  for(var pf=prints.length-1;pf>=0;pf--){
+    prints[pf].life-=dt*0.055;
+    if(prints[pf].life<=0) prints.splice(pf,1);
+  }
+
+  // Far-off shipping: at this distance you see only a light and a smudge,
+  // sliding along the horizon and fading out again.
+  if(night){
+    if(farLights.length<4 && Math.random()<dt*0.09){
+      var fd=Math.random()<0.5?1:-1;
+      farLights.push({x:fd>0?-12:W+12, y:HORIZON-1-Math.random()*2.2, dir:fd,
+                      v:(1.4+Math.random()*1.6)*fd, life:0, fade:0,
+                      hue:Math.random()<0.7?"w":"y", p:Math.random()*6.28});
+    }
+  }
+  for(var fl=farLights.length-1;fl>=0;fl--){
+    var FL=farLights[fl];
+    FL.x+=FL.v*dt; FL.life+=dt; FL.p+=dt*2.1;
+    FL.fade=Math.min(1,FL.life/6);
+    if(!night) FL.fade=Math.max(0,FL.fade-dt);
+    if(FL.x<-20||FL.x>W+20||(!night&&FL.fade<=0)) farLights.splice(fl,1);
+  }
+
+  // A bloom is a property of the night, not the moment: the same night always
+  // glows or does not, and it is uncommon.
+  var dnow=new Date();
+  var nightKey=dnow.getFullYear()*10000+(dnow.getMonth()+1)*100+
+               (dnow.getHours()<6?dnow.getDate()-1:dnow.getDate());
+  var hsh=(nightKey*2654435761)>>>0;
+  bioNight=((hsh%100)<11);          // roughly one night in nine
+  var wantBio = (bioNight && night) ? 1 : 0;
+  bioBloom += (wantBio-bioBloom)*Math.min(1,dt*0.35);
+
+  // Wind: a slow base with gusts riding on top. Everything flexible uses it.
+  wind.phase+=dt*0.19;
+  wind.gust=Math.max(0,wind.gust-dt*0.55);
+  if(Math.random()<dt*0.06) wind.gust=0.5+Math.random()*0.9;
+  wind.base=0.42+0.3*Math.sin(wind.phase)+0.15*Math.sin(wind.phase*2.7);
+  wind.val=Math.max(0.05,Math.min(1.8,wind.base+wind.gust));
+
+  lightPhase+=dt;
+
+  // break bird
+  idleSec+=dt;
+  if(!bottle && !bird && idleSec > BREAK_MINUTES*60){
+    // something drifts in from out at sea
+    var from = walker.x<W/2 ? -20 : W+20;
+    bottle={x:from, y:HORIZON+Math.round((EDGE-HORIZON)*0.55), landed:false, t:0,
+            tx:walker.x+(walker.dir>0?10:-10), ty:EDGE+3};
+    breakDue=true;
+  }
+  if(bottle){
+    bottle.t+=dt;
+    if(!bottle.landed){
+      var bdx=bottle.tx-bottle.x, bdy=bottle.ty-bottle.y;
+      var bd=Math.hypot(bdx,bdy);
+      if(bd<2.5){
+        bottle.landed=true;
+        Snd.chime(72);
+        toast("A bottle washed up &mdash; <b>time to rest your eyes?</b>",11000);
+      } else {
+        bottle.x+=bdx/bd*11*dt; bottle.y+=bdy/bd*11*dt;
+      }
+    } else if(bottle.t>260) { bottle=null; breakDue=false }
+  }
+  if(bird){
+    bird.p+=dt*8;
+    if(!bird.landed){
+      var dx=bird.tx-bird.x, dy=bird.ty-bird.y, d=Math.hypot(dx,dy);
+      if(d<2){ bird.landed=true } else { bird.x+=dx/d*46*dt; bird.y+=dy/d*46*dt }
+    } else {
+      bird.stay+=dt;
+      if(bird.stay>150) bird=null;
+    }
+  }
+}
+
+function noteActivity(){
+  idleSec=0;
+  if(bottle && bottle.landed){
+    pop(bottle.x-2,bottle.y-12,"!","#EAF2F0");
+    bottle=null;
+    if(breakDue){ breakDue=false; toast("Welcome back") }
+  }
+  if(bird){ pop(bird.x,bird.y-8,"!","#EAF2F0"); bird=null }
+}
+
+// ===================================================================
+// DRAWING
+// ===================================================================
+function drawClouds(){
+  var tint = sky.glow>0.6 ? "234,242,240" : (sun.alt<8 ? "255,190,150" : "255,255,255");
+  for(var i=0;i<clouds.length;i++){
+    var c=clouds[i];
+    ctx.fillStyle="rgba("+tint+","+c.o+")"; ctx.fillRect(c.x|0,c.y|0,c.w|0,c.h|0);
+    ctx.fillStyle="rgba("+tint+","+(c.o*0.7)+")";
+    ctx.fillRect((c.x+c.w*0.18)|0,(c.y-3)|0,(c.w*0.55)|0,4);
+    ctx.fillStyle="rgba("+tint+","+(c.o*0.45)+")";
+    ctx.fillRect((c.x+c.w*0.42)|0,(c.y-6)|0,(c.w*0.28)|0,3);
+  }
+}
+
+// The land masses, as paths. Ships get clipped out of these so nothing —
+// hull, light, glow or reflection — can ever appear through solid rock.
+function landPath(){
+  var ix=LM.island, iy=HORIZON;
+  ctx.beginPath();
+  // headland
+  ctx.moveTo(0,HORIZON+5); ctx.lineTo(0,HORIZON-16);
+  ctx.lineTo(13,HORIZON-20); ctx.lineTo(26,HORIZON-13);
+  ctx.lineTo(41,HORIZON-5); ctx.lineTo(58,HORIZON); ctx.lineTo(76,HORIZON+5);
+  ctx.closePath();
+  // island
+  ctx.moveTo(ix-31,iy+5); ctx.lineTo(ix-25,iy-3); ctx.lineTo(ix-15,iy-7);
+  ctx.lineTo(ix-2,iy-9);  ctx.lineTo(ix+12,iy-7); ctx.lineTo(ix+22,iy-3);
+  ctx.lineTo(ix+29,iy+5);
+  ctx.closePath();
+}
+
+function drawShips(){
+  // draw far vessels first so near ones overlap them correctly
+  var order=ships.slice().sort(function(p,q){return p.depth-q.depth});
+  ctx.save();
+  // "everything except the land": even-odd fill of the full frame minus land
+  ctx.beginPath();
+  ctx.rect(0,0,W,EDGE+2);
+  landPath();
+  ctx.clip("evenodd");
+
+  for(var i=0;i<order.length;i++){
+    var S=order[i];
+    var x=Math.round(S.x), y=Math.round(S.y), L=Math.max(4,Math.round(S.len));
+    var hullH=Math.max(2,Math.round(2+S.sc*2));
+    var wl=y+hullH;
+    // haze: distant vessels wash out toward the sky colour
+    var haze=1-S.depth*0.55;
+    var hull=sky.glow>0.5?"#060B14":"#22303A";
+    var deck=sky.glow>0.5?"#0C1521":"#31404A";
+
+    ctx.save(); ctx.globalAlpha=0.55+haze*0.45;
+
+    if(S.kind==="sail"){
+      var hy=y+1, lean=S.heel;
+      ctx.fillStyle=hull;
+      ctx.beginPath();
+      ctx.moveTo(x+1,hy); ctx.lineTo(x+L-1,hy);
+      ctx.lineTo(x+L-Math.round(L*0.2),wl); ctx.lineTo(x+Math.round(L*0.2),wl);
+      ctx.closePath(); ctx.fill();
+      var mastX=Math.round(x+L*0.45), mh=Math.round(S.tall);
+      var belly=Math.max(0.55,Math.min(1.5,wind.val));
+      ctx.fillRect(mastX,hy-mh,1,mh);
+      var main = sky.glow>0.5 ? "rgba(186,202,218,0.5)" : "rgba(255,253,246,0.95)";
+      var jib  = sky.glow>0.5 ? "rgba(158,176,196,0.38)" : "rgba(234,239,246,0.82)";
+      ctx.fillStyle=main;
+      ctx.beginPath(); ctx.moveTo(mastX,hy-mh);
+      ctx.lineTo(mastX+lean*Math.round(mh*0.52*belly),hy-1); ctx.lineTo(mastX,hy-1);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle=jib;
+      ctx.beginPath(); ctx.moveTo(mastX,hy-mh+Math.round(mh*0.22));
+      ctx.lineTo(mastX-lean*Math.round(mh*0.30*belly),hy-1); ctx.lineTo(mastX,hy-1);
+      ctx.closePath(); ctx.fill();
+    } else if(S.kind==="fisher"){
+      ctx.fillStyle=hull;
+      ctx.beginPath();
+      ctx.moveTo(x,y+1); ctx.lineTo(x+L,y+1);
+      ctx.lineTo(x+L-Math.round(L*0.16),wl); ctx.lineTo(x+Math.round(L*0.1),wl);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle=sky.glow>0.5?"#123040":"#2F6C7A";
+      ctx.fillRect(x+1,y+1,L-2,1);
+      var wh=Math.round(x+(S.dir>0?L*0.24:L*0.6));
+      ctx.fillStyle=deck;
+      ctx.fillRect(wh,y-Math.round(S.tall*0.6),Math.max(2,Math.round(L*0.2)),Math.round(S.tall*0.6)+1);
+      ctx.fillRect(Math.round(x+L*0.5),y-Math.round(S.tall),1,Math.round(S.tall));
+      if(S.sc>0.9){
+        ctx.fillStyle=hull;
+        ctx.fillRect(Math.round(x+L*0.5)-3,y-Math.round(S.tall)+1,7,1);   // spreader
+      }
+      if(S.phase==="moored"){
+        ctx.fillStyle="rgba(234,242,240,0.22)";
+        ctx.fillRect(x-2,wl,L+4,1);
+      }
+    } else {
+      ctx.fillStyle=hull;
+      ctx.beginPath();
+      ctx.moveTo(x+1,y); ctx.lineTo(x+L,y); ctx.lineTo(x+L-1,wl); ctx.lineTo(x+2,wl);
+      ctx.closePath(); ctx.fill();
+      if(S.big){
+        ctx.fillStyle=deck;
+        var sx2=S.dir>0 ? x+L-Math.round(L*0.34) : x+Math.round(L*0.1);
+        var sh=Math.round(S.tall*0.8);
+        ctx.fillRect(sx2,y-sh,Math.round(L*0.24),sh);
+        ctx.fillRect(sx2+2,y-sh-Math.round(S.tall*0.35),Math.max(2,Math.round(L*0.1)),Math.round(S.tall*0.4));
+        ctx.fillStyle=hull;
+        for(var k=0;k<3;k++) ctx.fillRect(x+3+k*Math.round(L*0.17),y-2,Math.round(L*0.14),2);
+      } else {
+        ctx.fillStyle=deck;
+        var cx2=Math.round(S.dir>0?x+L*0.5:x+L*0.3);
+        ctx.fillRect(cx2,y-Math.round(S.tall*0.7),Math.max(2,Math.round(L*0.2)),Math.round(S.tall*0.7));
+      }
+    }
+    ctx.restore();
+
+    // reflection: shorter and fainter the further away it is
+    var rl=Math.max(1,Math.round(2+S.depth*4));
+    for(var r=0;r<rl;r++){
+      var ry=wl+1+r; if(ry>EDGE-3) break;
+      var jit=Math.sin(S.x*0.3+r*1.7+performance.now()/900)*(1+S.depth*2);
+      ctx.fillStyle="rgba(10,16,26,"+((sky.glow>0.5?0.26:0.15)*(1-r/rl))+")";
+      ctx.fillRect(Math.round(x+r+jit),ry,Math.max(2,L-r*2),1);
+    }
+    // wake, only worth drawing when near enough to see
+    if(S.depth>0.25 && S.phase!=="moored"){
+      ctx.fillStyle="rgba(234,242,240,"+(0.10*S.depth+0.04)+")";
+      var bow=S.dir>0?x+L-2:x;
+      ctx.fillRect(bow-(S.dir>0?Math.round(L*0.3):0),wl,Math.round(L*0.4),1);
+      var stern=S.dir>0?x-Math.round(L*0.4):x+L;
+      ctx.fillStyle="rgba(234,242,240,"+(0.06*S.depth)+")";
+      ctx.fillRect(stern,wl,Math.round(L*0.5),1);
+    }
+
+    if(sky.glow>0.35 && S.kind!=="sail"){
+      S.flick=(S.flick||0)+0.09;
+      var fk=0.82+0.13*Math.sin(S.flick*1.7)+0.05*Math.sin(S.flick*5.3);
+      var a=sky.glow*(0.6+S.depth*0.4)*fk;
+      ctx.fillStyle="rgba(255,246,215,"+(0.95*a)+")";
+      ctx.fillRect(Math.round(x+L*0.5),y-Math.round(S.tall)-1,1,1);
+      ctx.fillStyle="rgba(255,74,74,"+(0.9*a)+")";
+      ctx.fillRect(S.dir>0?x+1:x+L-2,y-1,1,1);
+      ctx.fillStyle="rgba(74,255,128,"+(0.9*a)+")";
+      ctx.fillRect(S.dir>0?x+L-2:x+1,y-1,1,1);
+      for(var q=0;q<2;q++){
+        var gy=wl+1+q*2; if(gy>EDGE-3) break;
+        ctx.fillStyle="rgba(255,240,200,"+(0.09*a*(1-q/2))+")";
+        ctx.fillRect(Math.round(x+L*0.5-2+Math.sin(performance.now()/700+q)*2),gy,4,1);
+      }
+    }
+    if(S.kind==="sail" && sky.glow>0.4){
+      ctx.fillStyle="rgba(255,255,255,"+(0.8*sky.glow)+")";
+      ctx.fillRect(Math.round(x+L*0.45),y-Math.round(S.tall)-1,1,1);
+    }
+  }
+  ctx.restore();
+}
+
+function drawGulls(){
+  for(var i=0;i<gulls.length;i++){
+    var g=gulls[i], x=g.x|0, y=g.y|0;
+    ctx.fillStyle= g.y<HORIZON ? "rgba(250,252,255,0.82)" : "rgba(28,38,48,0.62)";
+    if(g.state==="dive"){
+      // wings tucked, falling like a dart
+      ctx.fillRect(x,y,2,4);
+      ctx.fillRect(x-1,y+1,1,2); ctx.fillRect(x+2,y+1,1,2);
+    } else if(g.glide && g.state==="glide"){
+      // held wings, barely moving
+      ctx.fillRect(x-4,y,3,1); ctx.fillRect(x+2,y,3,1); ctx.fillRect(x-1,y,3,1);
+    } else {
+      var up=Math.sin(g.p)>0;
+      if(up){ ctx.fillRect(x-3,y,2,1); ctx.fillRect(x+2,y,2,1); ctx.fillRect(x-1,y+1,3,1) }
+      else  { ctx.fillRect(x-3,y+2,2,1); ctx.fillRect(x+2,y+2,2,1); ctx.fillRect(x-1,y,3,1) }
+    }
+  }
+}
+
+// Wakes: long healing scars on the water where a hull has passed.
+// The moon: a disc with the maria roughly where they actually are, lit from
+// the sun's side, with the true phase for tonight. It should be recognisable
+// as the moon, not a large star.
+function moonPhase(d){
+  // days since a known new moon, over the synodic month
+  var syn=29.530588853;
+  var days=(d.getTime()/86400000)-6.8576;   // 2000-01-06 18:14 UTC new moon
+  var age=((days%syn)+syn)%syn;
+  return age/syn;                            // 0 new, .5 full, 1 new again
+}
+var MARIA=[
+  [-3,-3,3,2],[0,-4,2,2],[2,-1,3,3],[-4,1,3,2],[-1,2,2,2],[3,3,2,2],[-5,-1,2,2]
+];
+function drawMoon(mx,my){
+  mx=Math.round(mx); my=Math.round(my);
+  var R=9;
+  var ph=moonPhase(new Date());
+  var illum=Math.abs(Math.cos(ph*Math.PI*2))*0;  // placeholder, replaced below
+  // fraction lit, and which limb is lit
+  var k=(1-Math.cos(ph*2*Math.PI))/2;            // 0 new .. 1 full
+  var waxing = ph<0.5;
+
+  // the glow, scaled by how much of it is lit
+  var GR=Math.round(16+18*k);
+  var mg=ctx.createRadialGradient(mx,my,0,mx,my,GR);
+  mg.addColorStop(0,   "rgba(214,228,248,"+(0.06+0.20*k)+")");
+  mg.addColorStop(0.28,"rgba(206,222,246,"+(0.03+0.09*k)+")");
+  mg.addColorStop(1,   "rgba(200,218,244,0)");
+  ctx.fillStyle=mg; ctx.fillRect(mx-GR,my-GR,GR*2,GR*2);
+
+  // disc
+  ctx.fillStyle="rgba(233,238,246,0.97)";
+  ctx.beginPath(); ctx.arc(mx,my,R,0,6.2832); ctx.fill();
+
+  // maria — the dark basalt plains, which is what makes it read as the moon
+  ctx.save();
+  ctx.beginPath(); ctx.arc(mx,my,R-0.5,0,6.2832); ctx.clip();
+  ctx.fillStyle="rgba(168,180,198,0.85)";
+  for(var i=0;i<MARIA.length;i++){
+    var M=MARIA[i];
+    ctx.fillRect(mx+M[0],my+M[1],M[2],M[3]);
+  }
+  ctx.fillStyle="rgba(150,163,184,0.7)";
+  ctx.fillRect(mx-2,my-2,2,2); ctx.fillRect(mx+4,my+1,2,1);
+  // a couple of bright rays from a young crater
+  ctx.fillStyle="rgba(248,250,255,0.75)";
+  ctx.fillRect(mx-1,my+5,1,3); ctx.fillRect(mx+2,my+5,1,2);
+  ctx.restore();
+
+  // The terminator is an ellipse, not an offset circle. Its projected
+  // semi-axis is a = R*(1-2k): positive when a crescent (the shadow bulges
+  // across the disc) and negative when gibbous (a thin bite at one limb).
+  // Waxing is lit on the right, so the shadow sits on the left, and waning
+  // is the mirror of that.
+  if(k<0.985){
+    var a=R*(1-2*k);
+    for(var yy=-R;yy<=R;yy++){
+      var halfW=Math.sqrt(Math.max(0,R*R-yy*yy));
+      if(halfW<0.5) continue;
+      var xt=a*Math.sqrt(Math.max(0,1-(yy*yy)/(R*R)));   // terminator at this row
+      var x0,x1;
+      if(waxing){ x0=-halfW; x1=xt }                      // shadow on the left
+      else       { x0=-xt;   x1=halfW }                   // shadow on the right
+      if(x1<=x0) continue;
+      ctx.fillStyle=sky.top;
+      ctx.fillRect(Math.round(mx+x0),my+yy,Math.max(1,Math.round(x1-x0)),1);
+      // earthshine: the unlit disc is faintly visible, lit by the Earth
+      ctx.fillStyle="rgba(150,172,206,"+(0.055+0.05*(1-k))+")";
+      ctx.fillRect(Math.round(mx+x0),my+yy,Math.max(1,Math.round(x1-x0)),1);
+    }
+    // a soft edge along the terminator itself, so it is not a hard cut
+    ctx.fillStyle="rgba(190,205,228,0.30)";
+    for(var ey=-R;ey<=R;ey+=1){
+      var hw=Math.sqrt(Math.max(0,R*R-ey*ey));
+      if(hw<0.5) continue;
+      var ex=a*Math.sqrt(Math.max(0,1-(ey*ey)/(R*R)));
+      if(Math.abs(ex)>hw) continue;
+      ctx.fillRect(Math.round(mx+ex),my+ey,1,1);
+    }
+  }
+}
+
+function drawFarLights(){
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0,0,W,EDGE+2); landPath(); ctx.clip("evenodd");
+  for(var i=0;i<farLights.length;i++){
+    var F=farLights[i];
+    var flick=0.75+0.25*Math.sin(F.p*3.1)+0.08*Math.sin(F.p*11);
+    var a=F.fade*flick*sky.glow;
+    if(a<=0.01) continue;
+    var col=F.hue==="w"?"255,246,220":"255,214,150";
+    // the hull is only a smudge at this distance
+    ctx.fillStyle="rgba(30,44,58,"+(F.fade*0.34)+")";
+    ctx.fillRect(Math.round(F.x)-3,Math.round(F.y),7,1);
+    ctx.fillStyle="rgba("+col+","+(a*0.16)+")";
+    ctx.fillRect(Math.round(F.x)-4,Math.round(F.y)-4,9,9);
+    ctx.fillStyle="rgba("+col+","+a+")";
+    ctx.fillRect(Math.round(F.x),Math.round(F.y)-1,1,1);
+    ctx.fillStyle="rgba("+col+","+(a*0.22)+")";
+    ctx.fillRect(Math.round(F.x)-1,Math.round(F.y)+1,3,1);
+  }
+  ctx.restore();
+}
+
+function drawWakes(){
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0,0,W,EDGE+2); landPath(); ctx.clip("evenodd");
+  for(var i=0;i<wakes.length;i++){
+    var K=wakes[i], a=K.life*K.life;
+    if(K.y>EDGE-3) continue;
+    if(bioBloom>0.05){
+      ctx.fillStyle="rgba(100,240,228,"+(0.22*a*bioBloom)+")";
+      ctx.fillRect(Math.round(K.x-K.w/2),Math.round(K.y),Math.round(K.w),1);
+    }
+    ctx.fillStyle="rgba(234,242,240,"+(0.13*a*(0.4+K.depth*0.6))+")";
+    ctx.fillRect(Math.round(K.x-K.w/2),Math.round(K.y),Math.round(K.w),1);
+    ctx.fillStyle="rgba(234,242,240,"+(0.06*a)+")";
+    ctx.fillRect(Math.round(K.x-K.w*0.7),Math.round(K.y+1),Math.round(K.w*1.4),1);
+  }
+  ctx.restore();
+}
+
+// Dolphins arcing through the horizon line, so it is not just a flat edge.
+function drawPods(){
+  for(var i=0;i<pods.length;i++){
+    var P=pods[i];
+    if(P.arc<=0) continue;                       // below the surface
+    var a=P.arc, x=Math.round(P.x), sc=P.sc;
+    var lift=Math.round(a*7*sc);
+    var y=Math.round(P.y-lift);
+    var L=Math.max(3,Math.round(8*sc));
+    ctx.globalAlpha=0.55+P.depth*0.45;
+    ctx.fillStyle=sky.glow>0.5?"#0B1622":"#22333F";
+    // back
+    ctx.fillRect(x,y,L,Math.max(1,Math.round(2*sc)));
+    // dorsal fin at the top of the arc
+    if(a>0.45) ctx.fillRect(x+Math.round(L*0.45),y-Math.max(1,Math.round(2*sc)),1,Math.max(1,Math.round(2*sc)));
+    // snout leading, tail trailing
+    if(a>0.25){
+      ctx.fillRect(P.dir>0?x+L:x-1,y-(a>0.7?1:0),1,1);
+      ctx.fillRect(P.dir>0?x-1:x+L,y+1,1,1);
+    }
+    ctx.globalAlpha=1;
+    // splash where it broke the surface
+    if(a>0.08&&a<0.30){
+      ctx.fillStyle="rgba(255,255,255,"+(0.5*(1-Math.abs(a-0.19)/0.11))+")";
+      ctx.fillRect(x-1,Math.round(P.y),L+2,1);
+    }
+  }
+}
+
+// Once in a long while, something bigger.
+function drawWhale(){
+  if(!whale||!whale.surf) return;
+  var a=whale.surf, x=Math.round(whale.x), y=Math.round(whale.y-a*4);
+  ctx.globalAlpha=0.8;
+  ctx.fillStyle=sky.glow>0.5?"#0A141F":"#1E2E39";
+  var L=Math.round((24*a+8)*whale.sc);
+  ctx.fillRect(x,y,L,Math.max(1,Math.round(3*a)));
+  ctx.fillRect(x+Math.round(L*0.2),y-1,Math.round(L*0.5),1);
+  if(a>0.6){
+    ctx.fillRect(x+Math.round(L*0.62),y-2,2,2);            // small dorsal
+    ctx.fillRect(whale.dir>0?x-4:x+L+1,y-2,4,3);           // fluke as it rolls
+  }
+  ctx.globalAlpha=1;
+  ctx.fillStyle="rgba(255,255,255,"+(0.34*a)+")";
+  ctx.fillRect(x-2,Math.round(whale.y+1),L+4,1);
+  if(whale.spout>0){
+    var sp=Math.min(1,whale.spout/2.6);
+    var bx=x+Math.round(L*0.18), h=Math.round(11*sp);
+    ctx.fillStyle="rgba(255,255,255,"+(0.5*sp)+")";
+    ctx.fillRect(bx,y-h,1,h);
+    ctx.fillStyle="rgba(255,255,255,"+(0.3*sp)+")";
+    ctx.fillRect(bx-2,y-h-2,2,3); ctx.fillRect(bx+1,y-h-3,2,3);
+    ctx.fillRect(bx-3,y-h+2,1,2); ctx.fillRect(bx+3,y-h+1,1,2);
+  }
+}
+
+// Static beach dressing, generated once so it never crawls about.
+function buildBeach(){
+  var seed=91177;
+  function rnd(){ seed=(seed*1103515245+12345)&0x7fffffff; return seed/0x7fffffff }
+  beachProps={shells:[],wood:[],wrack:[],rocks:[]};
+  for(var i=0;i<26;i++)
+    beachProps.shells.push({x:rnd()*W, y:EDGE+9+rnd()*(H-EDGE-16), k:Math.floor(rnd()*3)});
+  for(var j=0;j<3;j++)
+    beachProps.wood.push({x:40+rnd()*(W-90), y:EDGE+16+rnd()*(H-EDGE-26),
+                          w:9+rnd()*16, a:rnd()<0.5?0:1});
+  for(var k=0;k<60;k++)
+    beachProps.wrack.push({x:rnd()*W, o:0.3+rnd()*0.5, d:rnd()*6});
+  for(var m=0;m<9;m++)
+    beachProps.rocks.push({x:rnd()*W, y:EDGE+6+rnd()*10, s:1+Math.floor(rnd()*2)});
+  // a rowing boat pulled up out of the water
+  beachProps.boat={x:Math.round(W*0.72), y:EDGE+22};
+}
+
+function drawBeachDetail(t, shoreY){
+  if(!beachProps||beachProps.W!==W){ buildBeach(); beachProps.W=W }
+  var night=sky.glow>0.5;
+
+  // wrack line: dried weed left by the last high tide
+  for(var i=0;i<beachProps.wrack.length;i++){
+    var w=beachProps.wrack[i];
+    var y=shoreY(w.x)+9+w.d;
+    ctx.fillStyle= night ? "rgba(14,20,28,"+(w.o*0.5)+")" : "rgba(86,72,44,"+(w.o*0.42)+")";
+    ctx.fillRect(w.x|0,y|0,2,1);
+  }
+  // pebbles
+  for(var r=0;r<beachProps.rocks.length;r++){
+    var rk=beachProps.rocks[r];
+    ctx.fillStyle= night ? "#181F2A" : "#8B7C63";
+    ctx.fillRect(rk.x|0,rk.y|0,rk.s+1,rk.s);
+    ctx.fillStyle= night ? "#222B38" : "#A6957A";
+    ctx.fillRect(rk.x|0,rk.y|0,1,1);
+  }
+  // shells
+  for(var sI=0;sI<beachProps.shells.length;sI++){
+    var sh=beachProps.shells[sI];
+    ctx.fillStyle= night ? "rgba(150,164,180,0.5)" : "rgba(252,246,236,0.92)";
+    if(sh.k===0){ ctx.fillRect(sh.x|0,sh.y|0,2,1); ctx.fillRect((sh.x+0.5)|0,(sh.y-1)|0,1,1) }
+    else if(sh.k===1){ ctx.fillRect(sh.x|0,sh.y|0,1,2) }
+    else { ctx.fillRect(sh.x|0,sh.y|0,2,2);
+           ctx.fillStyle=night?"rgba(90,104,120,0.5)":"rgba(226,208,186,0.9)";
+           ctx.fillRect(sh.x|0,sh.y|0,1,1) }
+  }
+  // driftwood
+  for(var dI=0;dI<beachProps.wood.length;dI++){
+    var wd=beachProps.wood[dI];
+    ctx.fillStyle= night ? "#121922" : "#6B5340";
+    ctx.fillRect(wd.x|0,wd.y|0,wd.w|0,2);
+    ctx.fillRect((wd.x+wd.w*0.3)|0,(wd.y-1)|0,3,1);
+    ctx.fillStyle="rgba(0,0,0,0.10)";
+    ctx.fillRect(wd.x|0,(wd.y+2)|0,(wd.w+2)|0,1);
+  }
+  // footprints the walker has left
+  for(var fI=0;fI<prints.length;fI++){
+    var pr=prints[fI];
+    ctx.fillStyle="rgba(0,0,0,"+(0.16*pr.life)+")";
+    ctx.fillRect(pr.x|0,pr.y|0,2,1);
+    if(bioBloom>0.05 && pr.life>0.55){
+      // wet sand flashes where he has just trodden
+      var g=(pr.life-0.55)/0.45*bioBloom;
+      ctx.fillStyle="rgba(120,250,235,"+(g*0.55)+")";
+      ctx.fillRect(pr.x|0,pr.y|0,2,1);
+      ctx.fillStyle="rgba(120,250,235,"+(g*0.14)+")";
+      ctx.fillRect((pr.x-2)|0,(pr.y-2)|0,6,5);
+    }
+  }
+  // the beached rowing boat
+  var b=beachProps.boat;
+  ctx.fillStyle="rgba(0,0,0,0.13)";
+  ctx.fillRect(b.x-13,b.y+3,28,2);
+  ctx.fillStyle= night ? "#111A25" : "#5E4A3C";
+  ctx.beginPath();
+  ctx.moveTo(b.x-13,b.y-3); ctx.lineTo(b.x+14,b.y-3);
+  ctx.lineTo(b.x+10,b.y+3); ctx.lineTo(b.x-9,b.y+3);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle= night ? "#1B2734" : "#8A6E56";
+  ctx.fillRect(b.x-11,b.y-3,23,1);
+  ctx.fillStyle= night ? "#111A25" : "#4A3A2E";
+  ctx.fillRect(b.x-3,b.y-2,2,4);
+  ctx.fillRect(b.x-18,b.y-1,7,1);                      // oar leaning out
+}
+
+// The rest reminder: a bottle rides in on the swell and grounds near him.
+function drawBottle(t, shoreY){
+  if(!bottle) return;
+  var x=Math.round(bottle.x), y=Math.round(bottle.y+Math.sin(washPhase*1.6)*(bottle.landed?0.4:1.8));
+  var night=sky.glow>0.5;
+  ctx.fillStyle="rgba(0,0,0,0.12)";
+  ctx.fillRect(x-3,y+3,8,1);
+  ctx.fillStyle= night ? "rgba(120,190,175,0.85)" : "rgba(122,186,160,0.95)";
+  ctx.fillRect(x-3,y,7,3);                       // body
+  ctx.fillRect(x+4,y+1,2,1);                     // neck
+  ctx.fillStyle="#C9A66B";
+  ctx.fillRect(x+6,y+1,1,1);                     // cork
+  ctx.fillStyle="rgba(250,246,232,0.95)";
+  ctx.fillRect(x-2,y+1,3,1);                     // the note inside
+  ctx.fillStyle="rgba(255,255,255,0.5)";
+  ctx.fillRect(x-3,y,7,1);                       // highlight
+  if(bottle.landed){
+    var pulse=0.4+0.35*Math.sin(t*2.6);
+    ctx.fillStyle="rgba(255,217,125,"+(pulse*0.3)+")";
+    ctx.fillRect(x-7,y-5,16,13);
+  }
+}
+
+function drawCrabs(t){
+  for(var i=0;i<crabs.length;i++){
+    var C=crabs[i], x=C.x|0, y=C.y|0;
+    ctx.fillStyle="rgba(0,0,0,0.13)"; ctx.fillRect(x-2,y+2,6,1);
+    ctx.fillStyle=sky.glow>0.5?"#2A1E1C":"#8C4A38";
+    ctx.fillRect(x-1,y,4,2);
+    ctx.fillRect(x-2,y-1,1,1); ctx.fillRect(x+3,y-1,1,1);   // claws
+    var lift=(C.state==="run"&&Math.sin(C.p)>0)?1:0;
+    ctx.fillRect(x-2,y+2-lift,1,1); ctx.fillRect(x+3,y+1+lift,1,1);
+    ctx.fillStyle=sky.glow>0.5?"#3A2A26":"#F0D8CC";
+    ctx.fillRect(x,y,1,1);
+  }
+}
+
+// A mooring pole with a small boat tied to it, and two smaller marker buoys.
+// Enough to read as a working stretch of water without cluttering it.
+function drawMoorings(t){
+  var night=sky.glow>0.5;
+  var dark=night?"#0A1320":"#4A3A2E";
+  var px=Math.round(W*0.70), py=EDGE-Math.round(tide.height*8)-9;
+  // A moored boat barely moves. It lifts on the swell and settles, and the
+  // motion scales with the tidal range — almost still at neaps and slack
+  // water, livelier on a spring flood. It is not a river.
+  var lively=0.35+tide.range*0.5+tide.current*0.45;
+  if(sky.glow>0.5) lively*=1.25;                 // choppier after dark
+  var bobA=(Math.sin(washPhase*1.15)*0.9+Math.sin(washPhase*0.47+1.3)*0.5)*lively;
+  var bobB=(Math.sin(washPhase*1.15+1.1)*0.8+Math.sin(washPhase*0.6)*0.4)*lively;
+  var heel=Math.sin(washPhase*1.15+0.4)*lively*0.6;
+
+  // the pole
+  ctx.fillStyle=dark;
+  ctx.fillRect(px,py-15,2,20);
+  ctx.fillRect(px-1,py-17,4,2);
+  ctx.fillStyle="rgba(10,16,26,0.20)";
+  ctx.fillRect(px-1,py+5,4,3);
+
+  // ---- the moored boat, drawn big enough to actually read ----------
+  var bx2=px-24, by2=py-1+bobA, byr=Math.round(by2);
+  var hl=Math.round(heel);
+
+  // its reflection, broken by the surface
+  ctx.fillStyle="rgba(10,16,26,0.22)";
+  for(var rr2=0;rr2<3;rr2++)
+    ctx.fillRect(bx2-11+Math.round(Math.sin(washPhase*2+rr2)*1.5),byr+6+rr2,22-rr2*4,1);
+
+  // hull: dark below the rubbing strake, pale topsides
+  ctx.fillStyle=night?"#0B1420":"#4A3A2C";
+  ctx.beginPath();
+  ctx.moveTo(bx2-13+hl,byr);      ctx.lineTo(bx2+13+hl,byr);
+  ctx.lineTo(bx2+10,byr+6);       ctx.lineTo(bx2-9,byr+6);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle=night?"#1B2836":"#C8B79C";       // topsides catch the light
+  ctx.fillRect(bx2-12+hl,byr,25,2);
+  ctx.fillStyle=night?"#0E1926":"#7E5E42";       // rubbing strake
+  ctx.fillRect(bx2-12+hl,byr+2,25,1);
+  ctx.fillStyle=night?"#08111B":"#33261C";       // sheer and stem
+  ctx.fillRect(bx2+12+hl,byr-1,2,3);
+  ctx.fillRect(bx2-14+hl,byr-1,2,3);
+  // thwarts and a small cabin
+  ctx.fillStyle=night?"#101D2A":"#8A6B4C";
+  ctx.fillRect(bx2-6+hl,byr-4,9,4);
+  ctx.fillStyle=night?"#050C14":"#2A2018";
+  ctx.fillRect(bx2-4+hl,byr-3,5,2);              // the dark of the doorway
+  // mast, raked slightly with the heel
+  ctx.fillStyle=night?"#0B1420":"#3E3126";
+  ctx.fillRect(bx2+5+hl,byr-13,1,13);
+  ctx.fillRect(bx2+3+hl,byr-13,5,1);
+  // fenders over the side
+  ctx.fillStyle=night?"#16222E":"#9A8262";
+  ctx.fillRect(bx2+8,byr+2,1,2); ctx.fillRect(bx2-8,byr+2,1,2);
+
+  // the mooring line, sagging and taking up as she rides
+  ctx.strokeStyle=night?"rgba(150,172,192,0.34)":"rgba(64,52,40,0.62)";
+  ctx.lineWidth=1; ctx.beginPath();
+  ctx.moveTo(bx2+13+hl,byr+1);
+  ctx.quadraticCurveTo((bx2+13+px)/2,byr+5+bobA*0.5,px,py-13);
+  ctx.stroke();
+
+  // a lamp aboard, and its long reflection
+  if(night){
+    ctx.fillStyle="rgba(255,228,160,0.09)"; ctx.fillRect(bx2-8+hl,byr-14,17,17);
+    ctx.fillStyle="rgba(255,228,160,0.17)"; ctx.fillRect(bx2-3+hl,byr-9,8,8);
+    ctx.fillStyle="rgba(255,236,180,0.95)"; ctx.fillRect(bx2+1+hl,byr-6,1,2);
+    for(var lr=0;lr<4;lr++){
+      ctx.fillStyle="rgba(255,228,160,"+(0.13-lr*0.03)+")";
+      ctx.fillRect(bx2+Math.round(Math.sin(washPhase*2.2+lr)*2),byr+6+lr*2,3,1);
+    }
+  }
+  // water breaking against her at night, or on a big spring tide
+  if((night||tide.range>0.85) && Math.sin(washPhase*1.15)>0.72){
+    var sl=(Math.sin(washPhase*1.15)-0.72)/0.28;
+    ctx.fillStyle="rgba(255,255,255,"+(0.42*sl)+")";
+    ctx.fillRect(bx2-15+hl,byr+3,5,1);
+    ctx.fillStyle="rgba(255,255,255,"+(0.26*sl)+")";
+    ctx.fillRect(bx2-16+hl,byr+2,3,1); ctx.fillRect(bx2+12+hl,byr+3,4,1);
+  }
+
+  // two small marker buoys further out
+  var marks=[[Math.round(W*0.58),HORIZON+26,bobB,"g"],[Math.round(W*0.79),HORIZON+33,bobA*0.85,"r"]];
+  for(var m=0;m<marks.length;m++){
+    var MX=marks[m][0], MY=Math.round(marks[m][1]+marks[m][2]);
+    ctx.fillStyle="rgba(10,16,26,0.16)"; ctx.fillRect(MX-1,MY+3,3,2);
+    ctx.fillStyle=night?"#0D1721":"#2E4148";
+    ctx.fillRect(MX-1,MY,3,3); ctx.fillRect(MX,MY-3,1,3);
+    ctx.fillStyle= marks[m][3]==="g" ? (night?"#153322":"#3E8C55") : (night?"#33161A":"#B2453B");
+    ctx.fillRect(MX-1,MY,3,1);
+    if(night){
+      var fl=((buoy.flash+m*1.3)%4)<0.5;
+      if(fl){
+        var cc=marks[m][3]==="g"?"90,255,150":"255,100,90";
+        ctx.fillStyle="rgba("+cc+",0.16)"; ctx.fillRect(MX-4,MY-7,9,9);
+        ctx.fillStyle="rgba("+cc+",0.9)";  ctx.fillRect(MX,MY-3,1,1);
+      }
+    }
+    ctx.fillStyle="rgba(234,242,240,0.13)"; ctx.fillRect(MX-2,MY+3,5,1);
+  }
+}
+
+function drawBuoy(t){
+  var bx=buoy.x, by=HORIZON+38-tide.height*3+buoy.bob;
+  var dark=sky.glow>0.5?"#0C1520":"#2E4148";
+  // reflection first
+  ctx.fillStyle="rgba(10,16,26,0.18)";
+  ctx.fillRect(bx-1,(by+5)|0,4,3);
+  ctx.fillStyle=dark;
+  ctx.fillRect(bx-2,(by)|0,6,5);
+  ctx.fillStyle=sky.glow>0.5?"#3A1D1D":"#C2453A";
+  ctx.fillRect(bx-2,(by+1)|0,6,2);
+  ctx.fillStyle=dark;
+  ctx.fillRect(bx,(by-6)|0,1,6);
+  ctx.fillRect(bx-1,(by-8)|0,3,2);
+  var on = (buoy.flash<0.55);
+  if(sky.glow>0.3 && on){
+    ctx.fillStyle="rgba(255,90,80,"+(0.20*sky.glow)+")"; ctx.fillRect(bx-6,(by-14)|0,13,13);
+    ctx.fillStyle="rgba(255,120,100,"+(0.9*sky.glow)+")"; ctx.fillRect(bx,(by-8)|0,1,1);
+  }
+  // it sits in a little collar of disturbed water
+  ctx.fillStyle="rgba(234,242,240,0.16)";
+  ctx.fillRect(bx-4,(by+4)|0,9,1);
+}
+
+// Surf smashing into the headland and the island rocks.
+function drawRockSurf(t){
+  for(var i=0;i<surfSpots.length;i++){
+    var SP=surfSpots[i], p=SP.p, mag=SP.mag||0.6;
+    // rise and decay both vary with the size of the break
+    var riseT=0.18+mag*0.22, fallT=1.3+mag*1.8;
+    var k = p<riseT ? p/riseT : Math.max(0, 1-(p-riseT)/fallT);
+    if(k<=0.02) continue;
+    var e=k*k*(0.45+mag*0.85);
+    var sd=SP.seed;
+    // the wash across the rock foot, with its own irregular profile
+    for(var x=-SP.w/2;x<SP.w/2;x+=2){
+      var fx=SP.x+x;
+      if(fx<-2||fx>W+2) continue;
+      var edge=Math.sin(x*0.19+sd)*1.6+Math.sin(x*0.07-sd*1.7)*1.3+Math.sin(x*0.41+sd*2.3)*0.7;
+      var lump=0.45+0.55*Math.sin(x*0.3+sd*3.1);
+      var h=1+Math.round(e*3.0*lump);
+      ctx.fillStyle="rgba(255,255,255,"+(0.30*e*(0.6+lump*0.6))+")";
+      ctx.fillRect(fx|0,(SP.y+edge-1)|0,2,h);
+    }
+    // plumes: count, position, height and lean all differ per break
+    var plumes=2+Math.floor((Math.sin(sd*5.1)*0.5+0.5)*4);
+    for(var q=0;q<plumes;q++){
+      var frac=(q+0.5)/plumes;
+      var jitter=Math.sin(sd*7.3+q*2.9);
+      var pxp=SP.x+(frac-0.5)*SP.w*0.9+jitter*4;
+      var peak=(1.8+Math.abs(Math.sin(sd*3.7+q*1.9))*4.2)*e*2.4*mag;
+      var hh=Math.max(1,Math.round(peak));
+      var lean=Math.round(jitter*wind.val*1.6);
+      ctx.fillStyle="rgba(255,255,255,"+(0.24*e)+")";
+      for(var yy=0;yy<hh;yy++){
+        var g=yy/hh;
+        ctx.fillRect(Math.round(pxp+lean*g),(SP.y-yy)|0,g>0.6?1:2,1);
+      }
+      // droplets flung clear at the top of the plume
+      if(e>0.35){
+        var dn=1+Math.floor(Math.abs(Math.sin(sd*11+q))*3);
+        for(var dI=0;dI<dn;dI++){
+          var dxp=pxp+lean+ (dI-1)*2 + Math.sin(sd*13+q+dI)*3;
+          var dyp=SP.y-hh-1-dI*2-Math.round(e*3);
+          ctx.fillStyle="rgba(255,255,255,"+(0.20*e*(1-dI*0.25))+")";
+          ctx.fillRect(dxp|0,dyp|0,1,1);
+        }
+      }
+    }
+    // backwash draining off the rocks as it collapses
+    if(p>riseT+0.25 && e>0.10){
+      var bw=(p-riseT-0.25)/fallT;
+      ctx.fillStyle="rgba(255,255,255,"+(0.14*e)+")";
+      for(var bx2=-SP.w/2;bx2<SP.w/2;bx2+=3){
+        if(Math.sin(bx2*0.5+sd*4)>0.1)
+          ctx.fillRect((SP.x+bx2)|0,(SP.y+1+bw*3)|0,2,1);
+      }
+    }
+  }
+}
+
+// Cloud shadows crossing the water. Only when the sun is high enough to cast.
+function drawCloudShadows(){
+  if(sun.alt<12) return;
+  var off=(180-sun.az)*0.25;
+  for(var i=0;i<clouds.length;i++){
+    var c=clouds[i];
+    var sxp=c.x+off, syp=HORIZON+8+(c.y*0.28);
+    if(syp>EDGE-6) continue;
+    ctx.fillStyle="rgba(6,26,38,"+(c.o*1.5)+")";
+    ctx.fillRect(sxp|0,syp|0,(c.w*1.25)|0,(3+c.h*0.35)|0);
+  }
+}
+
+function drawBird(){
+  if(!bird) return;
+  var x=bird.x|0, y=bird.y|0;
+  var col=sky.glow>0.5?"#0D1622":"#33231C";
+  ctx.fillStyle="rgba(255,217,125,0.10)"; ctx.fillRect(x-7,y-7,15,15);
+  ctx.fillStyle=col;
+  ctx.fillRect(x-2,y-4,5,4);       // body
+  ctx.fillRect(x+2,y-6,3,3);       // head
+  ctx.fillRect(x+5,y-5,2,1);       // beak
+  if(bird.landed){
+    ctx.fillRect(x-1,y,1,2); ctx.fillRect(x+1,y,1,2);
+    var t=Math.sin(bird.p*0.35);
+    if(t>0.7) ctx.fillRect(x-4,y-4,3,2);
+  } else {
+    var f=Math.sin(bird.p)>0;
+    if(f){ ctx.fillRect(x-5,y-7,4,2) } else { ctx.fillRect(x-5,y-2,4,2) }
+  }
+  ctx.fillStyle="#FFD97D"; ctx.fillRect(x+3,y-6,1,1);
+}
+
+function drawMeteors(){
+  ctx.lineWidth=1;
+  for(var i=0;i<meteors.length;i++){
+    var m=meteors[i];
+    ctx.strokeStyle="rgba(234,242,240,"+(Math.min(1,m.life)*0.9)+")";
+    ctx.beginPath(); ctx.moveTo(m.x,m.y);
+    ctx.lineTo(m.x-m.vx*0.28,m.y-m.vy*0.28); ctx.stroke();
+  }
+}
+
+function drawFireflies(){
+  for(var i=0;i<fireflies.length;i++){
+    var f=fireflies[i];
+    var b=(0.35+0.65*Math.max(0,Math.sin(f.p)))*Math.min(1,f.life);
+    ctx.fillStyle="rgba(190,255,140,"+(b*0.12)+")"; ctx.fillRect((f.x-3)|0,(f.y-3)|0,7,7);
+    ctx.fillStyle="rgba(215,255,170,"+b+")"; ctx.fillRect(f.x|0,f.y|0,1,1);
+  }
+}
+
+function drawPops(){
+  for(var i=0;i<pops.length;i++){
+    var p=pops[i], a=Math.min(1,p.life);
+    var col=p.col==="#FFD97D" ? "rgba(255,217,125,"+a+")" : "rgba(234,242,240,"+a+")";
+    pixText(p.t, p.x|0, p.y|0, col);
+  }
+}
+
+var picked=[], hoverStar=-1, activeFig=null;
+function starVisible(i){
+  return starPos[i*3+2]>1.5 && sky.glow>0.45 &&
+         starPos[i*3]>=-2 && starPos[i*3]<=W+2;
+}
+function starAlpha(i){
+  var a=Math.max(0.18,Math.min(1,(5.2-STARS[i][3])/4.6));
+  var ext=Math.min(1,Math.max(0,starPos[i*3+2]/16));
+  return a*(0.35+0.65*ext)*sky.glow;
+}
+function drawStars(t){
+  if(sky.glow<0.2) return;
+  var i;
+  for(var f=0;f<FIGURES.length;f++){
+    var F=FIGURES[f]; if(!F.found) continue;
+    var vis=true;
+    for(i=0;i<F.si.length;i++) if(!starVisible(F.si[i])){vis=false;break}
+    if(!vis) continue;
+    ctx.strokeStyle="rgba(111,211,199,"+(0.18*sky.glow)+")"; ctx.lineWidth=1; ctx.beginPath();
+    for(i=0;i<F.li.length;i++){
+      var pr=F.li[i];
+      ctx.moveTo(starPos[pr[0]*3]+0.5,starPos[pr[0]*3+1]+0.5);
+      ctx.lineTo(starPos[pr[1]*3]+0.5,starPos[pr[1]*3+1]+0.5);
+    }
+    ctx.stroke();
+  }
+  // Once you pick a star, the figure it belongs to reveals itself: the
+  // remaining stars are ringed and the lines you still need are ghosted in,
+  // so it is a puzzle with an answer rather than joining dots at random.
+  if(activeFig && !activeFig.found){
+    var AF=activeFig;
+    ctx.save();
+    ctx.setLineDash([2,3]);
+    ctx.strokeStyle="rgba(255,217,125,"+(0.26*sky.glow)+")"; ctx.lineWidth=1;
+    ctx.beginPath();
+    for(i=0;i<AF.li.length;i++){
+      var L2=AF.li[i];
+      if(picked.indexOf(L2[0])>=0 && picked.indexOf(L2[1])>=0) continue;
+      ctx.moveTo(starPos[L2[0]*3]+0.5,starPos[L2[0]*3+1]+0.5);
+      ctx.lineTo(starPos[L2[1]*3]+0.5,starPos[L2[1]*3+1]+0.5);
+    }
+    ctx.stroke();
+    ctx.restore();
+    // ring the stars still to find
+    for(i=0;i<AF.si.length;i++){
+      var sidx=AF.si[i];
+      if(picked.indexOf(sidx)>=0) continue;
+      var rx=Math.round(starPos[sidx*3]), ry=Math.round(starPos[sidx*3+1]);
+      var pulse=0.30+0.16*Math.sin(t*2.4+i);
+      ctx.strokeStyle="rgba(255,217,125,"+(pulse*sky.glow)+")"; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.arc(rx+0.5,ry+0.5,4,0,6.2832); ctx.stroke();
+    }
+    // solid lines for the pairs you have joined
+    ctx.strokeStyle="rgba(255,217,125,"+(0.7*sky.glow)+")"; ctx.lineWidth=1;
+    ctx.beginPath();
+    for(i=0;i<AF.li.length;i++){
+      var L3=AF.li[i];
+      if(picked.indexOf(L3[0])<0 || picked.indexOf(L3[1])<0) continue;
+      ctx.moveTo(starPos[L3[0]*3]+0.5,starPos[L3[0]*3+1]+0.5);
+      ctx.lineTo(starPos[L3[1]*3]+0.5,starPos[L3[1]*3+1]+0.5);
+    }
+    ctx.stroke();
+  }
+  for(i=0;i<STARS.length;i++){
+    if(!starVisible(i)) continue;
+    var fx=starPos[i*3], fy=starPos[i*3+1];
+    var x=Math.round(fx), y=Math.round(fy);
+    if(x<-6||x>W+6) continue;
+    var mag=STARS[i][3];
+    // two scintillation rates beating against each other, so no star pulses
+    // in step with its neighbour
+    var tw=reduced?1:(0.78+0.14*Math.sin(t*1.7+i*1.7)+0.08*Math.sin(t*4.3+i*0.9));
+    var a=starAlpha(i)*tw;
+    var on=picked.indexOf(i)>=0, hov=(i===hoverStar);
+    var bright=mag<1.6, mid=mag<2.8;
+
+    // soft halo, centred on the star, falling off radially
+    if(bright||mid){
+      var GR=bright?7:4.5;
+      var hg=ctx.createRadialGradient(x+0.5,y+0.5,0,x+0.5,y+0.5,GR);
+      hg.addColorStop(0,"rgba(226,238,255,"+(a*0.42)+")");
+      hg.addColorStop(0.4,"rgba(214,230,255,"+(a*0.13)+")");
+      hg.addColorStop(1,"rgba(200,222,255,0)");
+      ctx.fillStyle=hg;
+      ctx.fillRect(x-GR,y-GR,GR*2+1,GR*2+1);
+    }
+    // selection and hover rings, drawn as circles not squares
+    if(on||hov){
+      ctx.strokeStyle=on?"rgba(255,217,125,0.75)":"rgba(226,238,255,0.45)";
+      ctx.lineWidth=1;
+      ctx.beginPath(); ctx.arc(x+0.5,y+0.5,on?5:4,0,6.2832); ctx.stroke();
+    }
+    // the star itself: one pixel for faint, a plus-shape for the brightest
+    ctx.fillStyle=on?"rgba(255,224,150,1)":"rgba(244,249,255,"+Math.min(1,a*1.15)+")";
+    ctx.fillRect(x,y,1,1);
+    if(mid && a>0.42){
+      ctx.fillStyle=on?"rgba(255,224,150,0.55)":"rgba(240,247,255,"+(a*0.45)+")";
+      ctx.fillRect(x+1,y,1,1);
+    }
+    if(bright){
+      // Real scintillation is the star momentarily brightening and shifting
+      // colour, not growing spikes. Keep the spikes to a single faint pixel
+      // either side, and let the twinkle live in brightness and hue.
+      var sp=a*0.30;
+      ctx.fillStyle="rgba(228,240,255,"+sp+")";
+      ctx.fillRect(x-1,y,1,1); ctx.fillRect(x+1,y,1,1);
+      ctx.fillRect(x,y-1,1,1); ctx.fillRect(x,y+1,1,1);
+      if(!reduced){
+        // three incommensurate rates: brightness wanders, never repeats
+        var sc1=Math.sin(t*2.7+i*2.3), sc2=Math.sin(t*6.1+i*1.1), sc3=Math.sin(t*11.3+i*0.7);
+        var flash=(sc1*0.5+sc2*0.3+sc3*0.2);
+        if(flash>0.72){
+          var f=(flash-0.72)/0.28;
+          // atmospheric refraction splits the colour slightly as it flickers
+          var hue = sc2>0 ? "198,222,255" : "255,238,214";
+          ctx.fillStyle="rgba("+hue+","+(f*0.55*a)+")";
+          ctx.fillRect(x,y,1,1);
+          ctx.fillStyle="rgba("+hue+","+(f*0.16*a)+")";
+          ctx.fillRect(x-1,y-1,3,3);
+        }
+      }
+    }
+  }
+}
+
+// ---- walker -------------------------------------------------------
+var walker={x:200,dir:1,state:"walk",timer:2,step:0,aim:-0.9};
+function stepWalker(dt){
+  if(charging){ walker.state="aim"; return }
+  if(walker.state==="aim") walker.state="idle", walker.timer=1.5;
+  walker.timer-=dt;
+  if(walker.timer<=0){
+    if(walker.state==="walk"){walker.state="idle";walker.timer=2+Math.random()*6}
+    else{walker.state="walk";walker.dir=Math.random()<.5?-1:1;walker.timer=3+Math.random()*8}
+  }
+  if(walker.state==="walk"){
+    var was=walker.step;
+    walker.x+=walker.dir*15*dt; walker.step+=dt*6.5;
+    if(Math.floor(was/3.14)!==Math.floor(walker.step/3.14)){
+      prints.push({x:walker.x+(Math.sin(walker.step)>0?1:-2), y:GROUND+1, life:1});
+      if(prints.length>34) prints.shift();
+    }
+    if(walker.x<LM.walkMin){walker.x=LM.walkMin;walker.dir=1}
+    if(walker.x>LM.walkMax){walker.x=LM.walkMax;walker.dir=-1}
+  }
+}
+function drawWalker(){
+  var x=Math.round(walker.x), y=GROUND;
+  var bob=walker.state==="walk"?Math.round(Math.sin(walker.step)*0.5):0;
+  var col=sky.glow>0.5?"#0A1018":"#39312C";
+  // long shadow on the sand
+  var sunScreenX = projAz(sun.az);
+  var shDir = sun.alt>0 ? (sunScreenX<x?1:-1) : 1;
+  var shLen = sun.alt>0 ? Math.round(4+Math.max(0,(30-sun.alt))*0.55) : 5;
+  ctx.fillStyle="rgba(0,0,0,"+(sky.glow>0.5?0.20:0.17)+")";
+  ctx.fillRect(shDir>0?x-2:x-shLen, y+1, shLen+4, 2);
+  ctx.fillStyle=col;
+  ctx.fillRect(x-1,y-14+bob,3,4);                 // head
+  ctx.fillRect(x-2,y-10+bob,5,7);                 // torso
+  // a wide-brimmed hat: warm leather by day, a silhouette after dark
+  var hatCol = sky.glow>0.5 ? "#0A1018" : "#6B4526";
+  var hatTop = sky.glow>0.5 ? "#0A1018" : "#7C5430";
+  ctx.fillStyle=hatCol;
+  ctx.fillRect(x-3,y-15+bob,7,1);                 // brim
+  ctx.fillStyle=hatTop;
+  ctx.fillRect(x-1,y-17+bob,3,2);                 // crown
+  ctx.fillStyle= sky.glow>0.5 ? "#0A1018" : "#4A2F1B";
+  ctx.fillRect(x-1,y-15+bob,3,1);                 // band
+  ctx.fillStyle=col;
+  if(walker.state==="aim"){
+    ctx.fillRect(x-3,y-3,3,3); ctx.fillRect(x+1,y-3,3,3);
+    var ax=Math.cos(walker.aim)*5, ay=Math.sin(walker.aim)*5;
+    ctx.fillRect((x+ax)|0,(y-9+ay)|0,2,2);        // cocked arm
+  } else if(walker.state==="walk"){
+    var sw=Math.sin(walker.step)>0?1:-1;
+    ctx.fillRect(x-2,y-3,2,3); ctx.fillRect(x+sw,y-3,2,3);
+  } else { ctx.fillRect(x-2,y-3,2,3); ctx.fillRect(x+1,y-3,2,3) }
+  if(sky.glow>0.4){
+    var lx=x+walker.dir*4, ly=y-8, p=1+level*0.7;
+    ctx.fillStyle="rgba(255,217,125,"+(0.085*sky.glow*p)+")"; ctx.fillRect(lx-9,ly-9,19,19);
+    ctx.fillStyle="rgba(255,217,125,"+(0.14*sky.glow*p)+")"; ctx.fillRect(lx-4,ly-4,9,9);
+    ctx.fillStyle="#FFD97D"; ctx.fillRect(lx,ly,1,2);
+  }
+}
+
+// ---- stones -------------------------------------------------------
+var stones=[],ripples=[],splashes=[],charging=false,chargeStart=0,charge=0;
+var best=parseInt(store.get("tidepool.best","0"),10)||0;
+document.getElementById("best").textContent=best;
+var mouseB={x:240,y:120};
+
+function throwStone(p){
+  var sp=70+p*205;
+  var surf=EDGE-tide.height*8-3;
+  var hy=Math.min(GROUND-20, surf-7);          // hand is always above the water
+  stones.push({x:walker.x+Math.cos(walker.aim)*6, y:hy+Math.sin(walker.aim)*4,
+    vx:Math.cos(walker.aim)*sp, vy:Math.sin(walker.aim)*sp,
+    skips:0, launched:false, sunk:false, age:0, x0:walker.x});
+}
+function stepStones(dt){
+  for(var i=stones.length-1;i>=0;i--){
+    var s=stones[i];
+    s.x+=s.vx*dt; s.y+=s.vy*dt; s.vy+=200*dt;
+    s.age+=dt;
+    if(!s.launched && (s.age>0.05 || Math.abs(s.x-s.x0)>7)) s.launched=true;
+    var surfY=EDGE-tide.height*8-3;
+    if(s.y>=surfY && s.vy>0 && s.launched){
+      // Angle of attack decides everything. A stone arriving almost flat
+      // planes off the surface and keeps nearly all its speed; one coming
+      // down steeply punches through and sinks. This is why a low, fast
+      // throw skips a dozen times and a lob skips twice.
+      var speed=Math.hypot(s.vx,s.vy);
+      var ang=Math.atan2(Math.abs(s.vy),Math.abs(s.vx))*DEG;
+
+      if(ang>34 || speed<40){
+        // too steep, or too slow to plane: it goes in, and throws water up
+        s.sunk=true;
+        var pw=Math.min(1.0, Math.min(1.1,speed/230)*(0.5+Math.min(1,ang/70)*0.62));
+        makeSplash(s.x,surfY,pw,s.vx);
+        ripples.push({x:s.x,y:surfY,r:0,life:1});
+        ripples.push({x:s.x,y:surfY,r:3,life:0.7});
+        Snd.sink(pw);
+        if(s.skips===0) pop(s.x-4,surfY-15,"0","#8FA6AD");
+        finish(s.skips); stones.splice(i,1); continue;
+      }
+
+      s.skips++;
+      ripples.push({x:s.x,y:surfY,r:0,life:1});
+      Snd.plop(Math.min(1,Math.abs(s.vy)/150));
+      pop(s.x-3, surfY-12, String(s.skips), s.skips>=6?"#EAF2F0":"#FFD97D");
+
+      // restitution falls off with the angle: 0.86 flat, 0.30 at the limit
+      // 0.84 rebound arriving flat, falling to 0.28 at the sinking limit
+      var e=Math.max(0.28,0.84-(ang/34)*0.56);
+      s.vy=-s.vy*e;
+      s.vx*=0.978-(ang/34)*0.05;       // skimming costs forward speed
+      // each successive skip robs a little more, so a run always ends
+      s.vy*=(1-Math.min(0.45,s.skips*0.028));
+      if(Math.abs(s.vy)<9||Math.abs(s.vx)<30){
+        makeSplash(s.x,surfY,0.30,s.vx*0.4);
+        Snd.sink(0.3);
+        finish(s.skips); stones.splice(i,1); continue;
+      }
+    }
+    if(s.x<-16||s.x>W+16||s.y>H+16){finish(s.skips);stones.splice(i,1)}
+  }
+  for(var j=ripples.length-1;j>=0;j--){
+    ripples[j].r+=24*dt; ripples[j].life-=dt*0.85;
+    if(ripples[j].life<=0) ripples.splice(j,1);
+  }
+}
+function finish(n){
+  var el=document.getElementById("last");
+  if(n===0){ el.textContent="sank"; return }
+  el.textContent=n+(n===1?" skip":" skips");
+  if(n>best){
+    best=n; document.getElementById("best").textContent=best;
+    store.set("tidepool.best",String(best));
+    if(n>=5){
+      toast("New best &mdash; <b>"+n+" skips</b>"+(n>=12?" &mdash; that was a good one":""));
+      Snd.chime(n>=12?83:76);
+    }
+  }
+}
+// A stone going in deep throws a column of water up after it, which then
+// falls back. Bigger and steeper impacts throw it higher. Each splash is
+// independent, so a handful thrown at once all plume separately.
+function makeSplash(x,y,power,vx){
+  var drops=[];
+  power=Math.max(0.15,Math.min(1.0,power));
+  var n=3+Math.round(power*8);
+  for(var d=0;d<n;d++){
+    var a=(-0.35-Math.random()*2.45);            // mostly upward, fanned
+    var sp=(22+Math.random()*40)*power;
+    drops.push({x:x, y:y, vx:Math.cos(a)*sp+vx*0.10, vy:Math.sin(a)*sp,
+                life:1, sz:Math.random()<0.3?2:1});
+  }
+  power=Math.max(0.15,Math.min(1.0,power));
+  splashes.push({x:x, y:y, p:power, t:0, life:1, drops:drops,
+                 crown:0.4+Math.random()*0.35});
+}
+
+function stepSplashes(dt){
+  for(var i=splashes.length-1;i>=0;i--){
+    var S=splashes[i];
+    S.t+=dt; S.life-=dt*0.85;
+    for(var d=S.drops.length-1;d>=0;d--){
+      var D=S.drops[d];
+      D.x+=D.vx*dt; D.y+=D.vy*dt; D.vy+=185*dt; D.life-=dt*0.75;
+      if(D.y>=S.y && D.vy>0){
+        // it falls back in and leaves a small ring of its own
+        if(D.life>0.3 && Math.random()<0.5)
+          ripples.push({x:D.x,y:S.y,r:0,life:0.35});
+        S.drops.splice(d,1); continue;
+      }
+      if(D.life<=0) S.drops.splice(d,1);
+    }
+    if(S.life<=0 && S.drops.length===0) splashes.splice(i,1);
+  }
+}
+
+function drawSplashes(){
+  var bio=bioBloom>0.05;
+  for(var i=0;i<splashes.length;i++){
+    var S=splashes[i], t=S.t, p=S.p;
+    var white = bio ? "170,255,246" : "255,255,255";
+    var pale  = bio ? "120,240,228"  : "226,240,246";
+
+    // the central column: shoots up fast, hangs, falls back
+    var up=0.11+p*0.07, down=0.30+p*0.22;
+    var h=0;
+    if(t<up) h=(t/up)*(3.5+p*10);
+    else if(t<up+down) h=(1-(t-up)/down)*(3.5+p*10);
+    if(h>0.5){
+      var col=Math.max(1,Math.round(h));
+      var wdt=Math.max(1,Math.round(3*p*(1-t/(up+down))));
+      for(var yy=0;yy<col;yy++){
+        var g=yy/col;
+        var ww=Math.max(1,Math.round(wdt*(1-g*0.7)));
+        ctx.fillStyle="rgba("+white+","+(0.55*(1-g*0.45)*Math.min(1,S.life*1.6))+")";
+        ctx.fillRect(Math.round(S.x-ww/2),Math.round(S.y-yy),ww,1);
+      }
+      // the tip breaks into droplets as it slows
+      if(t>up*0.7){
+        ctx.fillStyle="rgba("+white+","+(0.4*S.life)+")";
+        ctx.fillRect(Math.round(S.x-1),Math.round(S.y-col-1),1,1);
+        ctx.fillRect(Math.round(S.x+1),Math.round(S.y-col-2),1,1);
+      }
+    }
+
+    // the crown: a low collar of water thrown out sideways at the moment of entry
+    if(t<0.30){
+      var cr=(t/0.30);
+      var spread=Math.round(2+p*9*cr);
+      var ch=Math.max(1,Math.round((1-cr)*(1.5+p*3)));
+      for(var sx2=-spread;sx2<=spread;sx2+=2){
+        var edge=1-Math.abs(sx2)/(spread+1);
+        if(edge<0.15) continue;
+        ctx.fillStyle="rgba("+white+","+(0.42*(1-cr)*edge)+")";
+        ctx.fillRect(Math.round(S.x+sx2),Math.round(S.y-ch*edge),2,Math.max(1,Math.round(ch*edge)));
+      }
+    }
+
+    // droplets arcing out and falling back
+    for(var d=0;d<S.drops.length;d++){
+      var D=S.drops[d];
+      ctx.fillStyle="rgba("+pale+","+(0.75*Math.min(1,D.life))+")";
+      ctx.fillRect(Math.round(D.x),Math.round(D.y),D.sz,D.sz);
+      if(D.sz>1){
+        ctx.fillStyle="rgba("+white+","+(0.3*D.life)+")";
+        ctx.fillRect(Math.round(D.x),Math.round(D.y)-1,1,1);
+      }
+    }
+
+    // the hole it left in the surface, closing over
+    if(t<0.45){
+      var k=1-t/0.45;
+      ctx.fillStyle="rgba(10,22,32,"+(0.34*k*p)+")";
+      ctx.fillRect(Math.round(S.x-2*p),Math.round(S.y),Math.max(1,Math.round(4*p)),1);
+    }
+  }
+}
+
+function drawStones(){
+  for(var i=0;i<ripples.length;i++){
+    var r=ripples[i];
+    if(bioBloom>0.05){
+      ctx.fillStyle="rgba(110,248,232,"+(r.life*0.7*bioBloom)+")";
+      ctx.fillRect((r.x-r.r)|0,r.y|0,(r.r*2)|0,1);
+      ctx.fillStyle="rgba(110,248,232,"+(r.life*0.16*bioBloom)+")";
+      ctx.fillRect((r.x-r.r)|0,(r.y-2)|0,(r.r*2)|0,5);
+    }
+    ctx.fillStyle="rgba(234,242,240,"+(r.life*0.38*(1-bioBloom*0.6))+")";
+    ctx.fillRect((r.x-r.r)|0,r.y|0,(r.r*2)|0,1);
+    ctx.fillStyle="rgba(234,242,240,"+(r.life*0.18)+")";
+    ctx.fillRect((r.x-r.r*0.6)|0,(r.y+2)|0,(r.r*1.2)|0,1);
+  }
+  ctx.fillStyle=sky.glow>0.5?"#C9D6DD":"#463C34";
+  for(var j=0;j<stones.length;j++) ctx.fillRect(stones[j].x|0,stones[j].y|0,2,2);
+  // aim guide
+  if(charging){
+    var sp=70+charge*205, px=walker.x;
+    var py=Math.min(GROUND-20,(EDGE-tide.height*8-3)-7);
+    var vx=Math.cos(walker.aim)*sp, vy=Math.sin(walker.aim)*sp;
+    var surfG=EDGE-tide.height*8-3;
+    var hitA=null, gx=px, gy=py, sim=0;
+    for(var k=1;k<=90;k++){
+      var tt=k*0.02;
+      gx=px+vx*tt; gy=py+vy*tt+0.5*200*tt*tt;
+      if(gy>=surfG){ hitA=Math.atan2(Math.abs(vy+200*tt),Math.abs(vx))*DEG; break }
+      if(k%3===0){ ctx.fillStyle="rgba(255,217,125,0.30)"; ctx.fillRect(gx|0,gy|0,1,1) }
+    }
+    // show whether that line will skip or sink, before you let go
+    if(hitA!==null){
+      var good=hitA<=34;
+      ctx.strokeStyle= good ? "rgba(255,217,125,0.75)" : "rgba(200,120,110,0.7)";
+      ctx.lineWidth=1;
+      ctx.beginPath(); ctx.arc((gx|0)+0.5,(surfG|0)+0.5,good?3:2,0,6.2832); ctx.stroke();
+      if(good){
+        ctx.fillStyle="rgba(255,217,125,0.5)";
+        ctx.fillRect((gx|0)-4,(surfG|0),9,1);
+      }
+    }
+  }
+}
+
+// ---- media --------------------------------------------------------
+var player=document.getElementById("player");
+var playlist=[],ti=-1,urls=[],actx=null,analyser=null,freq=null,bands=new Float32Array(14);
+var eqBox=document.getElementById("eq"),eqBars=[];
+for(var eb=0;eb<14;eb++){var bi2=document.createElement("i");eqBox.appendChild(bi2);eqBars.push(bi2)}
+
+function initAnalyser(){
+  if(actx) return;
+  try{
+    if(!Snd.boot()) return;
+    actx=Snd.ctx;
+    var src=actx.createMediaElementSource(player);
+    analyser=actx.createAnalyser(); analyser.fftSize=64; analyser.smoothingTimeConstant=0.78;
+    src.connect(analyser); analyser.connect(Snd.master);
+    freq=new Uint8Array(analyser.frequencyBinCount);
+  }catch(e){analyser=null}
+}
+var extAudio=false,extDecay=0;
+function readLevel(dt){
+  if(extAudio){extDecay-=dt;if(extDecay<=0)extAudio=false;return}
+  if(!analyser||player.paused){
+    var target = (Lofi.on||Nocturne.on) ? 0.22+0.12*Math.sin(performance.now()/700) : 0;
+    level+=(target-level)*Math.min(1,dt*3);
+    for(var i=0;i<14;i++){
+      var tb = (Lofi.on||Nocturne.on) ? 0.10+0.5*Math.abs(Math.sin(performance.now()/(420+i*90)+i)) : 0;
+      bands[i]+=(tb-bands[i])*Math.min(1,dt*5);
+    }
+    return;
+  }
+  analyser.getByteFrequencyData(freq);
+  var s=0; for(var j=0;j<8;j++) s+=freq[j];
+  level+=(((s/8)/255)-level)*Math.min(1,dt*11);
+  for(var k=0;k<14;k++) bands[k]+=(((freq[k+1]||0)/255)-bands[k])*Math.min(1,dt*16);
+}
+function paintEq(){
+  for(var i=0;i<14;i++){
+    eqBars[i].style.height=(2+bands[i]*13).toFixed(1)+"px";
+    eqBars[i].style.opacity=(0.3+bands[i]*0.7).toFixed(2);
+  }
+}
+
+var elTrack=document.getElementById("track"),elBar=document.getElementById("barFill"),elPlay=document.getElementById("play");
+function loadTrack(i){
+  if(!playlist.length) return;
+  ti=((i%playlist.length)+playlist.length)%playlist.length;
+  player.src=playlist[ti].url;
+  elTrack.textContent=playlist[ti].name; elTrack.classList.remove("idle");
+  initAnalyser(); if(actx&&actx.state==="suspended") actx.resume();
+  if(Lofi.on) Lofi.stop(); if(Nocturne.on) Nocturne.stop(); syncBtns();
+  var p=player.play(); if(p&&p.catch) p.catch(function(){elPlay.textContent="Play"});
+}
+function setPlaylist(files){
+  for(var i=0;i<urls.length;i++) URL.revokeObjectURL(urls[i]);
+  urls=[];playlist=[];
+  for(var j=0;j<files.length;j++){
+    var u=URL.createObjectURL(files[j]); urls.push(u);
+    playlist.push({name:files[j].name.replace(/\.[^.]+$/,""),url:u});
+  }
+  if(playlist.length){loadTrack(0);toast(playlist.length+" tracks loaded")}
+}
+document.getElementById("audioInput").addEventListener("change",function(e){
+  if(e.target.files&&e.target.files.length) setPlaylist(e.target.files)});
+document.getElementById("pickAudio").addEventListener("click",function(){document.getElementById("audioInput").click()});
+document.getElementById("play").addEventListener("click",function(){
+  if(!playlist.length){document.getElementById("audioInput").click();return}
+  if(actx&&actx.state==="suspended") actx.resume();
+  if(player.paused) player.play(); else player.pause();
+});
+document.getElementById("next").addEventListener("click",function(){loadTrack(ti+1)});
+document.getElementById("prev").addEventListener("click",function(){
+  if(player.currentTime>3) player.currentTime=0; else loadTrack(ti-1)});
+player.addEventListener("play",function(){elPlay.textContent="Pause"});
+player.addEventListener("pause",function(){elPlay.textContent="Play"});
+player.addEventListener("ended",function(){loadTrack(ti+1)});
+player.addEventListener("timeupdate",function(){
+  if(player.duration) elBar.style.width=(player.currentTime/player.duration*100)+"%"});
+document.getElementById("bar").addEventListener("click",function(e){
+  if(!player.duration) return;
+  var r=this.getBoundingClientRect();
+  player.currentTime=((e.clientX-r.left)/r.width)*player.duration;
+});
+
+var ambBtn=document.getElementById("ambBtn"), lofiBtn=document.getElementById("lofiBtn");
+var nightBtn=document.getElementById("nightBtn");
+function syncBtns(){
+  ambBtn.classList.toggle("on",Snd.ambOn);
+  lofiBtn.classList.toggle("on",Lofi.on);
+  nightBtn.classList.toggle("on",Nocturne.on);
+  if(Nocturne.on){ elTrack.textContent="Nocturne \u2014 composed live, for the dark hours";
+                   elTrack.classList.remove("idle") }
+  else if(Lofi.on){ elTrack.textContent="Lo-fi \u2014 generated, endless"; elTrack.classList.remove("idle") }
+  else if(!playlist.length){ elTrack.textContent="Nothing playing"; elTrack.classList.add("idle") }
+}
+nightBtn.addEventListener("click",function(){
+  Snd.wake();
+  if(Nocturne.on) Nocturne.stop();
+  else{
+    if(Lofi.on) Lofi.stop();
+    if(!player.paused) player.pause();
+    Nocturne.start();
+    toast("Nocturne &mdash; <b>an original piece, composed as it plays</b>");
+  }
+  syncBtns();
+});
+ambBtn.addEventListener("click",function(){
+  Snd.wake();
+  if(Snd.ambOn) Snd.stopAmbience(); else { Snd.startAmbience(); toast("Sea and wind &mdash; all synthesised") }
+  syncBtns();
+});
+lofiBtn.addEventListener("click",function(){
+  Snd.wake();
+  if(Lofi.on) Lofi.stop();
+  else{ if(Nocturne.on) Nocturne.stop(); if(!player.paused) player.pause();
+        Lofi.start(); toast("Lo-fi &mdash; <b>generated live, never repeats</b>") }
+  syncBtns();
+});
+
+var film=document.getElementById("film"),filmUrl=null,screenOn=false,filmReady=false;
+var SCR={x:352,y:EDGE-62,w:112,h:63};
+document.getElementById("pickVideo").addEventListener("click",function(){document.getElementById("videoInput").click()});
+document.getElementById("videoInput").addEventListener("change",function(e){
+  var fl=e.target.files&&e.target.files[0]; if(!fl) return;
+  if(filmUrl) URL.revokeObjectURL(filmUrl);
+  filmUrl=URL.createObjectURL(fl); film.src=filmUrl;
+  filmReady=true; screenOn=true; syncScr(); film.play().catch(function(){});
+  toast("Playing on the beach screen");
+});
+var scrBtn=document.getElementById("screenToggle");
+function syncScr(){scrBtn.classList.toggle("on",screenOn)}
+scrBtn.addEventListener("click",function(){
+  screenOn=!screenOn;
+  if(screenOn&&filmReady) film.play().catch(function(){}); else film.pause();
+  syncScr();
+});
+
+// ---- scene --------------------------------------------------------
+function draw(t){
+  var g=ctx.createLinearGradient(0,0,0,HORIZON);
+  g.addColorStop(0,sky.top); g.addColorStop(0.72,mix(sky.top,sky.bot,0.72)); g.addColorStop(1,sky.bot);
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,HORIZON);
+
+  drawStars(t); drawMeteors(); drawClouds();
+
+  var sx=projAz(sun.az), sy=HORIZON-4-(sun.alt/90)*(HORIZON-10);
+  if(sun.alt>-0.9 && inView(sun.az)){
+    var rr=Math.round(sx), ry=Math.round(sy);
+    // low sun burns orange, high sun goes near-white; the corona is a real
+    // radial falloff rather than a square, which is what looked like cloud
+    var lowness=Math.max(0,Math.min(1,(16-sun.alt)/20));
+    var core = lowness>0.75 ? "#FFB367" : lowness>0.42 ? "#FFD79A" : "#FFF8E6";
+    var halo = lowness>0.75 ? "255,150,80" : lowness>0.42 ? "255,196,120" : "255,238,196";
+    var R=26+lowness*26;
+    var gg=ctx.createRadialGradient(rr+1,ry+1,0,rr+1,ry+1,R);
+    gg.addColorStop(0,   "rgba("+halo+","+(0.42+lowness*0.22)+")");
+    gg.addColorStop(0.16,"rgba("+halo+","+(0.20+lowness*0.14)+")");
+    gg.addColorStop(0.45,"rgba("+halo+","+(0.07+lowness*0.06)+")");
+    gg.addColorStop(1,   "rgba("+halo+",0)");
+    ctx.fillStyle=gg;
+    ctx.fillRect(rr-R,ry-R,R*2,R*2);
+    // the disc, drawn as a rounded pixel blob
+    ctx.fillStyle=core;
+    ctx.fillRect(rr-4,ry-2,10,5); ctx.fillRect(rr-2,ry-4,6,9);
+    ctx.fillRect(rr-3,ry-3,8,7);
+    ctx.fillStyle= lowness>0.6 ? "#FFE0AE" : "#FFFFF4";
+    ctx.fillRect(rr-1,ry-1,3,3);
+  } else {
+    if(moon.alt>-2 && inView(moon.az)) drawMoon(projAz(moon.az), projAlt(moon.alt));
+  }
+
+  drawGulls();
+
+  // ---- sea, in bands that get taller and slower toward the shore
+  ctx.fillStyle=sky.sea; ctx.fillRect(0,HORIZON,W,EDGE-HORIZON+2);
+
+  if(sun.alt>-7 && inView(sun.az)){
+    ctx.fillStyle="rgba(255,228,175,"+(0.09+sky.glow*0.07)+")";
+    for(var k=0;k<20;k++){
+      var yy=HORIZON+k*4, wob=reduced?0:Math.sin(t*1.1+k*0.9)*(2+k*0.5);
+      if(yy>EDGE-4) break;
+      ctx.fillRect((sx-8-k*1.4+wob)|0,yy,(16+k*2.6)|0,1);
+    }
+  } else if(moon.alt>2 && moon.lit>0.15 && inView(moon.az)){
+    var mpx=projAz(moon.az);
+    ctx.fillStyle="rgba(200,220,245,"+(0.05*sky.glow*moon.lit)+")";
+    for(var q2=0;q2<13;q2++){
+      var wy2=HORIZON+q2*4, wb=reduced?0:Math.sin(t*0.9+q2)*(2+q2*0.4);
+      if(wy2>EDGE-4) break;
+      ctx.fillRect((mpx-5-q2+wb)|0,wy2,(10+q2*1.8)|0,1);
+    }
+  }
+
+  drawFarLights();
+  drawCloudShadows();
+  drawWakes();
+  drawPods();
+  drawWhale();
+  drawShips();
+  drawBuoy(t);
+  drawMoorings(t);
+
+  // the far water is not empty: a fine stipple of distant ripple, too small
+  // to resolve into waves, which is what the flat band was missing
+  for(var fr=0;fr<7;fr++){
+    var fy=HORIZON+1+fr*2;
+    if(fy>HORIZON+16) break;
+    var al=0.035-fr*0.004;
+    ctx.fillStyle="rgba(234,242,240,"+al+")";
+    for(var fxp=(fr%2)*3;fxp<W;fxp+=6){
+      var jit=Math.sin(fxp*0.21+t*(0.11+fr*0.02)+fr*2.1);
+      if(jit>0.25) ctx.fillRect(fxp,fy,2,1);
+    }
+  }
+
+  // swell: perspective rows, each crest breaking whiter as it nears the beach
+  var boost=1+level*1.3;
+  var rows=16;
+  for(var w=0;w<rows;w++){
+    var f=w/rows;
+    var wy=HORIZON+6+Math.pow(f,1.45)*(EDGE-HORIZON-8);
+    var amp=(0.5+f*3.2)*boost*(0.6+tide.range*0.55);
+    // tidal streams run fastest at mid-tide and stop at slack water
+    var flow=0.30+tide.current*0.55;
+    var speed=reduced?0:t*(0.34-f*0.17)*flow;
+    var alpha=0.03+f*f*0.24;
+    var bio=bioBloom*f*f;
+    for(var x=0;x<W;x+=2){
+      var ph=x*(0.055-f*0.028)+speed*1.7+w*0.8;
+      var crest=Math.sin(ph);
+      var yy2=wy+crest*amp+Math.sin(ph*0.37+w)*amp*0.4;
+      var thick=1+(f>0.72&&crest>0.55?1:0);
+      if(bio>0.05 && crest>0.35){
+        // the breaking edge lights up blue-green where the water is strained
+        ctx.fillStyle="rgba(90,240,225,"+(bio*0.55*(crest-0.35)/0.65)+")";
+        ctx.fillRect(x,yy2|0,2,thick);
+        ctx.fillStyle="rgba(150,255,240,"+(bio*0.22)+")";
+        ctx.fillRect(x,(yy2|0)-1,2,1);
+      } else {
+        ctx.fillStyle="rgba(234,242,240,"+alpha+")";
+        ctx.fillRect(x,yy2|0,2,thick);
+      }
+    }
+  }
+
+  drawHeadland(t);
+  drawRockSurf(t);
+
+  // ---- beach: a hard, unambiguous line between water and sand
+  // high water pushes the whole waterline up the beach, low water pulls it back
+  var tideY=-tide.height*8;
+  var shoreY=function(x){ return EDGE + tideY + Math.sin(x*0.019+(reduced?0:t*0.11))*2.5 };
+
+  ctx.fillStyle=sky.sand;
+  ctx.beginPath(); ctx.moveTo(0,H);
+  for(var s3=0;s3<=W;s3+=4) ctx.lineTo(s3,shoreY(s3));
+  ctx.lineTo(W,H); ctx.closePath(); ctx.fill();
+
+  // wet sand strip, darker, right at the waterline
+  ctx.fillStyle="rgba(0,0,0,0.20)";
+  for(var wx2=0;wx2<=W;wx2+=2) ctx.fillRect(wx2,shoreY(wx2)|0,2,7);
+  // the strand line: sand the tide has uncovered since high water, paler
+  if(tide.height<0.15){
+    ctx.fillStyle="rgba(255,255,255,"+(0.035*(0.15-tide.height))+")";
+    for(var st2=0;st2<=W;st2+=2)
+      ctx.fillRect(st2,(shoreY(st2)+7)|0,2,Math.max(1,Math.round(-tide.height*7)));
+  }
+  // foam edge
+  var surge=Math.sin(washPhase)*2.2*(0.6+washStrength*0.7);
+  ctx.fillStyle="rgba(255,255,255,0.55)";
+  for(var fx2=0;fx2<=W;fx2+=2){
+    var fe=shoreY(fx2)+surge+Math.sin(fx2*0.14+t*1.6)*0.9;
+    ctx.fillRect(fx2,fe|0,2,1);
+  }
+  ctx.fillStyle="rgba(255,255,255,0.16)";
+  for(var fx3=0;fx3<=W;fx3+=2){
+    var fe2=shoreY(fx3)+surge+2+Math.sin(fx3*0.11+t*1.3)*1.1;
+    ctx.fillRect(fx3,fe2|0,2,1);
+  }
+  // dry sand speckle, for texture
+  ctx.fillStyle="rgba(0,0,0,0.06)";
+  for(var d=0;d<70;d++){
+    var dx=(d*67)%W, dy=EDGE+12+((d*37)%(H-EDGE-14));
+    ctx.fillRect(dx,dy,1,1);
+  }
+
+  drawCinema(t);
+  drawBeachDetail(t, shoreY);
+  drawCrabs(t);
+  drawStones();
+  drawSplashes();
+  drawWash(t, shoreY);        // the sheet lies on the sand...
+  drawWalker();               // ...he stands in it...
+  drawAnkleWash(t, shoreY);   // ...and only his ankles get covered
+  drawBottle(t, shoreY);
+  drawBird();
+  drawPier(t);
+  drawFireflies();
+  drawPops();
+}
+
+function washReach(){
+  var cyc=(Math.sin(washPhase)*0.5+0.5);
+  return cyc*cyc*(9+washStrength*17)*(0.7+tide.range*0.45);
+}
+
+// Only the last few pixels of water are drawn over him, so the swash covers
+// his ankles and never his body.
+function drawAnkleWash(t, shoreY){
+  var reach=washReach(); if(reach<0.6) return;
+  var cyc=(Math.sin(washPhase)*0.5+0.5);
+  var x=Math.round(walker.x);
+  var base=shoreY(x);
+  var wob=Math.sin(x*0.031+washPhase*1.3)*2.2+Math.sin(x*0.011-washPhase)*1.4;
+  var top=base+reach+wob;
+  if(top<GROUND-3) return;                 // water has not reached him yet
+  var band=Math.min(3,Math.max(1,top-(GROUND-3)));
+  var bio=bioBloom>0.05;
+  // a thin, uneven film rather than a solid block: each column gets its own
+  // depth, so the edge is ragged the way water on sand actually is
+  for(var wxp=-5;wxp<=5;wxp++){
+    var ripple=Math.sin((x+wxp)*0.9+washPhase*5.2)*0.5+Math.sin((x+wxp)*2.3-t*3.1)*0.35;
+    var d=band+ripple;
+    if(d<0.35) continue;
+    var h=Math.max(1,Math.round(Math.min(2.4,d)));
+    ctx.fillStyle= bio ? "rgba(110,238,226,"+(0.30+0.12*cyc)+")"
+                       : "rgba(158,202,212,"+(0.26+0.12*cyc)+")";
+    ctx.fillRect(x+wxp,GROUND,1,h);
+  }
+  // foam curling round his ankles, broken not continuous
+  for(var fxp=-5;fxp<=5;fxp++){
+    var n=Math.sin((x+fxp)*1.7+washPhase*4.1);
+    if(n<0.05) continue;
+    ctx.fillStyle= bio ? "rgba(170,255,246,"+(0.45*n)+")" : "rgba(255,255,255,"+(0.42*n)+")";
+    ctx.fillRect(x+fxp,GROUND-1,1,1);
+  }
+  // water parting round each leg
+  if(band>1.2){
+    var sw2=0.35+0.3*Math.sin(t*4.4);
+    ctx.fillStyle= bio ? "rgba(190,255,248,"+sw2+")" : "rgba(255,255,255,"+sw2+")";
+    ctx.fillRect(x-4,GROUND-1,1,1); ctx.fillRect(x+4,GROUND,1,1);
+    ctx.fillRect(x-3,GROUND+1,1,1);
+  }
+}
+
+// The swash: each wave runs up the sand and drains back.
+function drawWash(t, shoreY){
+  var cyc=(Math.sin(washPhase)*0.5+0.5);
+  var reach=cyc*cyc*(9+washStrength*17);
+  if(reach<0.6) return;
+  var lead=1-cyc;
+
+  for(var x=0;x<=W;x+=2){
+    var base=shoreY(x);
+    var wob=Math.sin(x*0.031+washPhase*1.3)*2.2+Math.sin(x*0.011-washPhase)*1.4;
+    var top=base+reach+wob;
+    var depth=Math.max(0,(base+reach+wob)-base);
+    if(depth<=0) continue;
+    // thin sheet of water lying on the sand
+    ctx.fillStyle="rgba(150,196,206,"+(0.10+0.08*cyc)+")";
+    ctx.fillRect(x,Math.round(base),2,Math.round(depth));
+    // the bright lip at the furthest point of the run
+    if(bioBloom>0.05){
+      ctx.fillStyle="rgba(120,250,235,"+((0.42+0.34*lead)*bioBloom+0.12)+")";
+      ctx.fillRect(x,Math.round(top),2,1);
+      ctx.fillStyle="rgba(70,220,215,"+(bioBloom*0.18)+")";
+      ctx.fillRect(x,Math.round(top)-1,2,1);
+      ctx.fillStyle="rgba(255,255,255,"+((0.42+0.34*lead)*(1-bioBloom))+")";
+      ctx.fillRect(x,Math.round(top),2,1);
+    } else {
+      ctx.fillStyle="rgba(255,255,255,"+(0.42+0.34*lead)+")";
+      ctx.fillRect(x,Math.round(top),2,1);
+    }
+    ctx.fillStyle="rgba(255,255,255,0.18)";
+    ctx.fillRect(x,Math.round(top)-1,2,1);
+  }
+  // foam left behind as it drains back
+  if(cyc<0.45){
+    for(var f=0;f<48;f++){
+      var fx=(f*97)%W;
+      var fy=shoreY(fx)+reach*0.55+((f*29)%5);
+      ctx.fillStyle="rgba(255,255,255,"+(0.10*(0.45-cyc)/0.45)+")";
+      ctx.fillRect(fx,Math.round(fy),2,1);
+    }
+  }
+}
+
+function drawHeadland(t){
+  var night=sky.glow>0.5;
+  var rock  = night ? "#050A12" : "#3A4740";
+  var rock2 = night ? "#0A121C" : "#47554C";
+  var rock3 = night ? "#0D1721" : "#556354";
+  var grass = night ? "#071019" : "#4E6A4A";
+
+  // ---- the headland: layered rock, not one flat wedge -----------------
+  ctx.fillStyle=rock2;
+  ctx.beginPath();
+  ctx.moveTo(0,HORIZON+4); ctx.lineTo(0,HORIZON-11);
+  ctx.lineTo(13,HORIZON-15); ctx.lineTo(26,HORIZON-12);
+  ctx.lineTo(41,HORIZON-4); ctx.lineTo(58,HORIZON+1); ctx.lineTo(74,HORIZON+4);
+  ctx.closePath(); ctx.fill();
+  // upper bluff, catching whatever light there is
+  ctx.fillStyle=rock3;
+  ctx.beginPath();
+  ctx.moveTo(0,HORIZON-11); ctx.lineTo(13,HORIZON-15);
+  ctx.lineTo(24,HORIZON-13); ctx.lineTo(20,HORIZON-9); ctx.lineTo(0,HORIZON-7);
+  ctx.closePath(); ctx.fill();
+  // a scrub line along the crest
+  ctx.fillStyle=grass;
+  ctx.fillRect(2,HORIZON-13,9,2); ctx.fillRect(14,HORIZON-16,7,2);
+  ctx.fillRect(23,HORIZON-14,6,2);
+  // dark cut of rock at the waterline, and boulders at the foot
+  ctx.fillStyle=rock;
+  ctx.fillRect(0,HORIZON+1,62,3);
+  ctx.fillRect(44,HORIZON-1,7,3); ctx.fillRect(53,HORIZON,6,3);
+  ctx.fillRect(36,HORIZON+1,5,2);
+
+  // ---- the lighthouse, centred on its own plinth ----------------------
+  var LX=17;                         // trunk centre
+  var base=HORIZON-15;
+  ctx.fillStyle=rock;
+  ctx.fillRect(LX-5,base-1,11,3);    // plinth, symmetric about LX
+  ctx.fillStyle=night?"#0B131D":"#C9C3B6";
+  ctx.fillRect(LX-3,base-6,7,6);     // wide lower course
+  ctx.fillRect(LX-2,base-13,5,7);    // tapered shaft
+  ctx.fillRect(LX-2,base-18,5,5);    // upper shaft
+  if(!night){
+    ctx.fillStyle="#A8433A";         // the classic red bands
+    ctx.fillRect(LX-3,base-5,7,2);
+    ctx.fillRect(LX-2,base-12,5,2);
+  } else {
+    ctx.fillStyle="#060D16";
+    ctx.fillRect(LX-3,base-5,7,2); ctx.fillRect(LX-2,base-12,5,2);
+  }
+  ctx.fillStyle=night?"#070E17":"#8E887C";
+  ctx.fillRect(LX-4,base-20,9,2);    // gallery deck, overhanging both sides
+  ctx.fillRect(LX-4,base-21,1,1); ctx.fillRect(LX+4,base-21,1,1);   // rail posts
+  ctx.fillStyle=night?"#0A121C":"#6E6A60";
+  ctx.fillRect(LX-2,base-25,5,4);    // lantern room housing
+  ctx.fillStyle=night?"#070E17":"#57534B";
+  ctx.fillRect(LX-3,base-27,7,2);    // roof
+  ctx.fillRect(LX,base-29,1,2);      // finial
+
+  if(sky.glow<0.42){
+    ctx.fillStyle="rgba(150,182,204,0.62)";
+    ctx.fillRect(LX-1,base-24,3,3);  // daylight glass
+    ctx.fillStyle="rgba(226,240,250,0.5)";
+    ctx.fillRect(LX-1,base-24,1,3);
+  }
+
+  if(sky.glow>0.42){
+    var PERIOD=7.5, lx=LX, ly=base-23;
+    var ang=(lightPhase/PERIOD)*Math.PI*2;
+    var d=Math.atan2(Math.sin(ang),Math.cos(ang));
+    var SIG=0.30;
+    var I=Math.exp(-(d*d)/(2*SIG*SIG));
+    var glowI=I*sky.glow;
+    var sweep=Math.sin(ang)*0.55;
+    if(glowI>0.006){
+      var len=210, spread=13+glowI*9;
+      var bx=lx+len, byc=ly+sweep*46;
+      var grd=ctx.createLinearGradient(lx,ly,bx,byc);
+      grd.addColorStop(0,"rgba(255,244,210,"+(glowI*0.22)+")");
+      grd.addColorStop(0.55,"rgba(255,240,200,"+(glowI*0.09)+")");
+      grd.addColorStop(1,"rgba(255,238,196,0)");
+      ctx.fillStyle=grd;
+      ctx.beginPath(); ctx.moveTo(lx,ly-2); ctx.lineTo(lx,ly+2);
+      ctx.lineTo(bx,byc+spread); ctx.lineTo(bx,byc-spread);
+      ctx.closePath(); ctx.fill();
+      var hg=ctx.createRadialGradient(lx,ly,0,lx,ly,17+glowI*13);
+      hg.addColorStop(0,"rgba(255,246,216,"+(glowI*0.5)+")");
+      hg.addColorStop(1,"rgba(255,246,216,0)");
+      ctx.fillStyle=hg; ctx.fillRect(lx-32,ly-32,66,66);
+    }
+    ctx.fillStyle="rgba(255,244,212,"+(0.20+0.80*I)+")";
+    ctx.fillRect(LX-1,base-24,3,3);
+    if(I>0.55){ ctx.fillStyle="rgba(255,255,240,"+((I-0.55)/0.45)+")"; ctx.fillRect(LX,base-24,1,2) }
+  }
+
+  // ---- the island: a real islet, big enough to hide a boat behind -----
+  var ix=LM.island, iy=HORIZON;
+  // clear anything drawn behind it, so nothing shows through the land
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(ix-30,iy+4); ctx.lineTo(ix-24,iy-2); ctx.lineTo(ix-14,iy-6);
+  ctx.lineTo(ix-2,iy-8);  ctx.lineTo(ix+11,iy-6); ctx.lineTo(ix+21,iy-2);
+  ctx.lineTo(ix+28,iy+4);
+  ctx.closePath();
+  ctx.fillStyle=sky.sea; ctx.fill();     // occlude
+  ctx.clip();
+  ctx.fillStyle=rock2;
+  ctx.fillRect(ix-32,iy-10,64,16);
+  // a sandy fringe where the island meets the water
+  ctx.fillStyle= night ? "#111A24" : "#B9A484";
+  ctx.fillRect(ix-32,iy+1,64,4);
+  // rock outcrop on the seaward side
+  ctx.fillStyle=rock3;
+  ctx.fillRect(ix+9,iy-6,12,6); ctx.fillRect(ix+15,iy-8,7,4);
+  ctx.fillStyle=rock;
+  ctx.fillRect(ix-24,iy-1,10,3);
+  // low scrub across the top
+  ctx.fillStyle=grass;
+  ctx.fillRect(ix-19,iy-7,13,3); ctx.fillRect(ix-6,iy-9,12,3);
+  ctx.fillRect(ix+4,iy-7,9,2);
+  ctx.restore();
+
+  // ---- the palm: base planted, bend increasing up the trunk ----------
+  var wv=reduced?0.25:wind.val;
+  var px=ix-3, py=iy-8, TH=17;
+  var sway=Math.sin(t*1.9+wind.phase*3)*0.35+Math.sin(t*0.7)*0.2;
+  ctx.fillStyle= night ? "#0A121C" : "#6B5136";
+  var tipX=px, tipY=py-TH;
+  for(var seg=0; seg<TH; seg++){
+    var f=seg/(TH-1);
+    // quadratic: no movement at the root, most at the crown
+    var bend=(wv*3.4+sway)*f*f;
+    var sxp=Math.round(px+bend);
+    ctx.fillRect(sxp, py-seg, seg<5?2:1, 1);
+    if(seg===TH-1){ tipX=sxp; tipY=py-seg }
+  }
+  // frond crown, streaming downwind
+  ctx.fillStyle= night ? "#0B141E" : "#4F7040";
+  var flut=Math.sin(t*4.2+wind.phase*5)*wv*0.9;
+  var fronds=[[-1,-3,-6,0],[1,-3,7,1],[-1,-2,-8,3],[1,-2,9,3],[0,-4,2,-3],[0,-4,-3,-3]];
+  for(var fr=0;fr<fronds.length;fr++){
+    var F=fronds[fr];
+    var ex=tipX+F[2]+Math.round(wv*1.8)+ (F[2]>0?Math.round(flut):-Math.round(flut));
+    var ey=tipY+F[3]+Math.round(F[2]>0? flut*0.6 : -flut*0.6);
+    // draw each frond as a short tapering run of pixels
+    var steps=Math.max(2,Math.abs(ex-tipX));
+    for(var st=0;st<=steps;st++){
+      var q=st/steps;
+      var qx=Math.round(tipX+(ex-tipX)*q);
+      var qy=Math.round(tipY+F[1]*(1-q)*0.4+(ey-tipY)*q*q);
+      ctx.fillRect(qx,qy,1,1);
+      if(q>0.25&&q<0.8) ctx.fillRect(qx,qy+1,1,1);
+    }
+  }
+  // coconuts tucked under the crown
+  ctx.fillStyle= night ? "#0A121C" : "#4A3524";
+  ctx.fillRect(tipX-1,tipY+2,1,1); ctx.fillRect(tipX+1,tipY+3,1,1);
+}
+
+function drawCinema(t){
+  if(!screenOn) return;
+  ctx.fillStyle=sky.glow>0.5?"#08101B":"#3B3835";
+  ctx.fillRect(SCR.x-2,SCR.y-2,SCR.w+4,SCR.h+4);
+  ctx.fillRect(SCR.x+8,SCR.y+SCR.h+2,2,GROUND-(SCR.y+SCR.h));
+  ctx.fillRect(SCR.x+SCR.w-10,SCR.y+SCR.h+2,2,GROUND-(SCR.y+SCR.h));
+  if(filmReady&&film.readyState>=2){
+    try{ctx.drawImage(film,SCR.x,SCR.y,SCR.w,SCR.h)}
+    catch(e){ctx.fillStyle="#111";ctx.fillRect(SCR.x,SCR.y,SCR.w,SCR.h)}
+  } else {
+    ctx.fillStyle="#111A26"; ctx.fillRect(SCR.x,SCR.y,SCR.w,SCR.h);
+    ctx.fillStyle="rgba(234,242,240,0.08)";
+    ctx.fillRect(SCR.x,SCR.y+Math.floor((t*22)%SCR.h),SCR.w,1);
+  }
+  if(sky.glow>0.35){
+    ctx.fillStyle="rgba(190,215,255,"+(0.04*sky.glow)+")";
+    ctx.fillRect(SCR.x-14,SCR.y+SCR.h,SCR.w+28,GROUND-SCR.y-SCR.h+8);
+  }
+}
+
+function drawPier(t){
+  var x0=LM.pier,y0=EDGE-14;
+  var dark=sky.glow>0.5?"#0A1320":"#463A33";
+  ctx.fillStyle=dark;
+  ctx.fillRect(x0-34,y0,62,3);
+  for(var p=0;p<6;p++) ctx.fillRect(x0-30+p*11,y0+3,2,16);
+  ctx.fillRect(x0+25,y0-13,2,13);
+  if(sky.glow>0.3){
+    var fl=reduced?1:(0.86+0.14*Math.sin(t*3.4)), pu=fl*(1+level*0.8);
+    ctx.fillStyle="rgba(255,217,125,"+(0.075*sky.glow*pu)+")"; ctx.fillRect(x0+14,y0-28,25,26);
+    ctx.fillStyle="rgba(255,217,125,"+(0.14*sky.glow*pu)+")"; ctx.fillRect(x0+20,y0-22,13,13);
+    ctx.fillStyle="#FFD97D"; ctx.fillRect(x0+25,y0-16,2,3);
+    ctx.fillStyle="rgba(255,217,125,"+(0.05*sky.glow*pu)+")"; ctx.fillRect(x0+18,y0+3,16,12);
+  } else { ctx.fillStyle=dark; ctx.fillRect(x0+25,y0-16,2,3) }
+}
+
+// ---- clock --------------------------------------------------------
+var elTime=document.getElementById("time"),elDate=document.getElementById("date"),elSolar=document.getElementById("solar");
+var DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+var MON=["January","February","March","April","May","June","July","August","September","October","November","December"];
+var lastPhase="";
+function updateClock(){
+  var d=new Date(),h=d.getHours(),m=d.getMinutes();
+  elTime.textContent=(h<10?"0":"")+h+":"+(m<10?"0":"")+m;
+  elDate.textContent=DAYS[d.getDay()]+" "+d.getDate()+" "+MON[d.getMonth()];
+  sun=solar(d); updatePalette(sun.alt); updateStars(d);
+  var now=h*60+m;
+  if(sun.alt>0&&sun.set!==null){
+    var left=Math.round(sun.set-now);
+    elSolar.textContent=left>90?"Sunset "+hhmm(sun.set):left>0?"Sunset in "+left+" min":"Sunset "+hhmm(sun.set);
+  } else if(sun.rise!==null) elSolar.textContent="Sunrise "+hhmm(sun.rise);
+  else elSolar.textContent="";
+  var phase=sun.alt>6?"day":sun.alt>-0.9?"golden":sun.alt>-6?"dusk":sun.alt>-12?"blue":"night";
+  if(lastPhase&&phase!==lastPhase){
+    if(phase==="golden") toast("Golden hour");
+    else if(phase==="dusk") toast("The sun has set");
+    else if(phase==="night"){
+      toast("Stars are out &mdash; <b>hover one to identify it</b>");
+      if(bioNight) setTimeout(function(){
+        toast("The water is glowing tonight &mdash; <b>a plankton bloom</b>",11000) },7000);
+    }
+    else if(phase==="day") toast("Sunrise");
+  }
+  lastPhase=phase;
+  updateMoon(d); updateTide(d);
+  var tl=document.getElementById("tideline");
+  if(tl){
+    var arrow = tide.slack ? "" : (tide.rising ? " \u2191" : " \u2193");
+    var sp = tide.range>0.82 ? "spring" : tide.range<0.5 ? "neap" : "";
+    tl.textContent = tide.state + arrow + (sp?" \u00b7 "+sp:"");
+  }
+  var vg=document.getElementById("vignette");
+  if(vg) vg.style.setProperty("--vig", (0.22+0.55*Math.max(0,Math.min(1,(sun.alt+4)/26))).toFixed(3));
+  renderSkyList();
+}
+
+// Which figure does a star belong to, and is that figure fully up tonight?
+function figureOf(i){
+  for(var f=0;f<FIGURES.length;f++)
+    if(FIGURES[f].si.indexOf(i)>=0) return FIGURES[f];
+  return null;
+}
+function figureUp(F){
+  for(var i=0;i<F.si.length;i++){
+    var k=F.si[i];
+    if(starPos[k*3+2]<2) return false;              // below the horizon
+    if(starPos[k*3]<-2||starPos[k*3]>W+2) return false;   // behind you
+  }
+  return true;
+}
+function compass(az){
+  var pts=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+  return pts[Math.round(((az%360)+360)%360/22.5)%16];
+}
+function starAzimuth(i){
+  // recover azimuth from the stored x projection
+  var r=(starPos[i*3]/W-0.5)*FOV;
+  return ((facing()+r)%360+360)%360;
+}
+function renderHover(){
+  var box=document.getElementById("starinfo");
+  if(hoverStar<0||!starVisible(hoverStar)){ box.classList.remove("on"); return }
+  var i=hoverStar, st=STARS[i], alt=starPos[i*3+2];
+  var F=figureOf(i);
+  var rows="";
+  rows+="<div class='sn'>"+st[0]+"</div>";
+  rows+="<div class='sr'><span>Magnitude</span><span>"+st[3].toFixed(2)+"</span></div>";
+  rows+="<div class='sr'><span>Altitude</span><span>"+alt.toFixed(0)+"&deg;</span></div>";
+  rows+="<div class='sr'><span>Bearing</span><span>"+compass(starAzimuth(i))+"</span></div>";
+  if(F){
+    var up=figureUp(F);
+    rows+="<div class='sr'><span>Part of</span><span>"+F.name+"</span></div>";
+    rows+="<div class='sf'>"+(F.found ? "Already traced"
+        : up ? "Fully above the horizon &mdash; click its stars to trace it"
+             : "Part of it is below the horizon tonight")+"</div>";
+  }
+  box.innerHTML=rows;
+  box.classList.add("on");
+  var r=cv.getBoundingClientRect();
+  var sc=Math.max(r.width/W,r.height/H);
+  var px=r.left+(r.width-W*sc)/2+starPos[i*3]*sc;
+  var py=r.top+(r.height-H*sc)/2+starPos[i*3+1]*sc;
+  box.style.left=Math.min(window.innerWidth-box.offsetWidth-12,Math.max(12,px+16))+"px";
+  box.style.top =Math.min(window.innerHeight-box.offsetHeight-12,Math.max(12,py-10))+"px";
+}
+
+function renderSkyList(){
+  var box=document.getElementById("sky"),list=document.getElementById("skyList");
+  if(box.dataset.off==="1"){box.style.display="none";return}
+  if(sky.glow<0.45){box.style.display="none";return}
+  box.style.display="block";
+  var rows=[],n=0;
+  for(var f=0;f<FIGURES.length&&n<7;f++){
+    var F=FIGURES[f];
+    if(!figureUp(F)) continue;
+    n++; rows.push(F.found?"<b>"+F.name+"</b>":F.name);
+  }
+  var done=0; for(var k=0;k<FIGURES.length;k++) if(FIGURES[k].found) done++;
+  var pts=["north","north-east","east","south-east","south","south-west","west","north-west"];
+  var look="Looking "+pts[Math.round(facing()/45)%8];
+  list.innerHTML=rows.join("<br>")+
+    "<br><span style='opacity:.6'>"+done+" of "+FIGURES.length+" traced &middot; "+look+"</span>";
+}
+
+// ---- notes --------------------------------------------------------
+var pad=document.getElementById("notepad"),savedTag=document.getElementById("saved"),nTimer=null;
+pad.value=store.get("tidepool.notes","");
+pad.addEventListener("input",function(){
+  noteActivity();
+  clearTimeout(nTimer);
+  nTimer=setTimeout(function(){
+    if(store.set("tidepool.notes",pad.value)){
+      savedTag.classList.add("show");
+      setTimeout(function(){savedTag.classList.remove("show")},1100);
+    }
+  },500);
+});
+
+// ---- panels: draggable, collapsible, hideable ----------------------
+var panels=[].slice.call(document.querySelectorAll(".panel"));
+panels.forEach(function(p){
+  var id=p.id, hd=p.querySelector(".hd"), fold=p.querySelector(".fold");
+
+  var savedPos=store.get("tidepool.pos."+id,"");
+  if(savedPos){
+    var parts=savedPos.split(",");
+    if(parts.length===2){
+      p.style.left=parts[0]+"px"; p.style.top=parts[1]+"px";
+      p.style.right="auto"; p.style.bottom="auto";
+      p.dataset.moved="1";
+    }
+  }
+  if(store.get("tidepool.fold."+id,"")==="1") p.classList.add("closed");
+
+  if(fold) fold.addEventListener("click",function(e){
+    e.stopPropagation();
+    p.classList.toggle("closed");
+    store.set("tidepool.fold."+id, p.classList.contains("closed")?"1":"0");
+    placePanels();
+  });
+
+  var drag=null;
+  hd.addEventListener("pointerdown",function(e){
+    if(e.target.classList.contains("fold")) return;
+    var r=p.getBoundingClientRect();
+    drag={dx:e.clientX-r.left, dy:e.clientY-r.top};
+    p.style.left=r.left+"px"; p.style.top=r.top+"px";
+    p.style.right="auto"; p.style.bottom="auto";
+    hd.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  hd.addEventListener("pointermove",function(e){
+    if(!drag) return;
+    var w=p.offsetWidth, h=p.offsetHeight, SNAP=18;
+    var m=Math.round(40*(parseFloat(getComputedStyle(document.documentElement)
+          .getPropertyValue("--ui"))||1));
+    var nx=Math.max(0,Math.min(window.innerWidth-w, e.clientX-drag.dx));
+    var ny=Math.max(0,Math.min(window.innerHeight-h, e.clientY-drag.dy));
+    // snap to the standard margins so hand-placed panels still line up
+    if(Math.abs(nx-m)<SNAP) nx=m;
+    if(Math.abs(nx-(window.innerWidth-w-m))<SNAP) nx=window.innerWidth-w-m;
+    if(Math.abs(ny-m)<SNAP) ny=m;
+    if(Math.abs(ny-(window.innerHeight-h-m))<SNAP) ny=window.innerHeight-h-m;
+    var cx=Math.round((window.innerWidth-w)/2);
+    if(Math.abs(nx-cx)<SNAP) nx=cx;
+    p.style.left=nx+"px"; p.style.top=ny+"px";
+    p.dataset.moved="1";
+  });
+  hd.addEventListener("pointerup",function(e){
+    if(!drag) return;
+    drag=null;
+    store.set("tidepool.pos."+id, parseInt(p.style.left)+","+parseInt(p.style.top));
+    try{hd.releasePointerCapture(e.pointerId)}catch(err){}
+  });
+});
+// On a 4K panel 13px type is unreadable; on a small laptop the panels crowd.
+// Scale the whole interface from the viewport height.
+function uiScale(){
+  var k=Math.max(0.82,Math.min(1.5,(window.innerHeight||1080)/1080));
+  document.documentElement.style.setProperty("--ui",k.toFixed(3));
+}
+
+// Panels that have not been dragged arrange themselves: the sky panel tucks
+// under whatever height the notes panel currently is, with a consistent gap.
+function placePanels(){
+  var m=Math.round(40*(parseFloat(getComputedStyle(document.documentElement)
+        .getPropertyValue("--ui"))||1));
+  var notes=document.getElementById("notes"), sky=document.getElementById("sky");
+  if(notes && !notes.dataset.moved){
+    notes.style.top=m+"px"; notes.style.right=m+"px";
+    notes.style.left="auto"; notes.style.bottom="auto";
+  }
+  if(sky && !sky.dataset.moved){
+    var top=m;
+    if(notes && notes.style.display!=="none" && notes.offsetHeight)
+      top=m+notes.offsetHeight+Math.round(m*0.4);
+    sky.style.top=top+"px"; sky.style.right=m+"px";
+    sky.style.left="auto"; sky.style.bottom="auto";
+  }
+  var clock=document.getElementById("clock");
+  if(clock && !clock.dataset.moved){ clock.style.top=m+"px"; clock.style.left=m+"px" }
+  var stones=document.getElementById("stones");
+  if(stones && !stones.dataset.moved){
+    stones.style.bottom=m+"px"; stones.style.left=m+"px";
+    stones.style.top="auto"; stones.style.right="auto";
+  }
+  var media=document.getElementById("media");
+  if(media && !media.dataset.moved){
+    media.style.bottom=m+"px";
+    media.style.left=Math.round((window.innerWidth-media.offsetWidth)/2)+"px";
+    media.style.top="auto"; media.style.right="auto";
+  }
+  var col=document.getElementById("colophon");
+  if(col){ col.style.bottom=m+"px"; col.style.right=m+"px" }
+}
+
+function resetPanels(){
+  panels.forEach(function(p){
+    store.set("tidepool.pos."+p.id,"");
+    delete p.dataset.moved;
+    p.style.left=""; p.style.top=""; p.style.right=""; p.style.bottom="";
+  });
+  placePanels();
+  toast("Widgets back where they started");
+}
+
+// ---- input --------------------------------------------------------
+var fill=document.getElementById("chargeFill");
+function onUI(el){return el.closest&&el.closest(".panel")!==null}
+function toBuf(cx,cy){
+  var r=cv.getBoundingClientRect();
+  var sc=Math.max(r.width/W,r.height/H);
+  return {x:(cx-r.left-(r.width-W*sc)/2)/sc, y:(cy-r.top-(r.height-H*sc)/2)/sc};
+}
+function nearestStar(bx,by,maxD,onlyFig){
+  var bi=-1,bd=maxD*maxD;
+  for(var i=0;i<STARS.length;i++){
+    if(!starVisible(i)) continue;
+    if(onlyFig && onlyFig.si.indexOf(i)<0) continue;
+    var dx=starPos[i*3]-bx,dy=starPos[i*3+1]-by,d=dx*dx+dy*dy;
+    if(d<bd){bd=d;bi=i}
+  }
+  return bi;
+}
+function tryComplete(){
+  for(var f=0;f<FIGURES.length;f++){
+    var F=FIGURES[f]; if(F.found||picked.length!==F.si.length) continue;
+    var all=true;
+    for(var i=0;i<F.si.length;i++) if(picked.indexOf(F.si[i])<0){all=false;break}
+    if(all){
+      F.found=true; store.set("tidepool.found."+F.name,"1");
+      toast("You traced <b>"+F.name+"</b>"); Snd.chime(81);
+      picked=[]; activeFig=null; renderSkyList(); return true;
+    }
+  }
+  return false;
+}
+
+cv.addEventListener("pointermove",function(e){
+  noteActivity();
+  mouseB=toBuf(e.clientX,e.clientY);
+  if(charging){
+    var dx=mouseB.x-walker.x, dy=mouseB.y-(GROUND-17);
+    walker.aim=Math.atan2(Math.min(dy,-5),dx);
+    walker.dir=dx<0?-1:1;
+  }
+  if(sky.glow<0.45){hoverStar=-1;cv.style.cursor="default";return}
+  hoverStar = mouseB.y<HORIZON ? nearestStar(mouseB.x,mouseB.y,8) : -1;
+  cv.style.cursor=hoverStar>=0?"pointer":"default";
+  renderHover();
+});
+
+window.addEventListener("pointerdown",function(e){
+  noteActivity();
+  if(onUI(e.target)) return;
+  var b=toBuf(e.clientX,e.clientY);
+  if(bird && Math.abs(b.x-bird.x)<16 && Math.abs(b.y-bird.y)<16){ noteActivity(); return }
+  // shoo a gull: they squeak and climb away
+  for(var gi=0;gi<gulls.length;gi++){
+    var GG=gulls[gi];
+    if(Math.abs(b.x-GG.x)<11 && Math.abs(b.y-GG.y)<11 && GG.state!=="flee"){
+      GG.state="flee"; Snd.squeak(); pop(GG.x-2,GG.y-9,"!","#EAF2F0");
+      // the rest of the flock startles too
+      for(var gj=0;gj<gulls.length;gj++){
+        var G2=gulls[gj];
+        if(G2!==GG && Math.abs(G2.x-GG.x)<70 && G2.state!=="flee" && Math.random()<0.7) G2.state="flee";
+      }
+      return;
+    }
+  }
+  if(bottle && bottle.landed && Math.abs(b.x-bottle.x)<14 && Math.abs(b.y-bottle.y)<14){
+    noteActivity(); return;
+  }
+  if(b.y<HORIZON && sky.glow>0.45){
+    var i=nearestStar(b.x,b.y,8);
+    if(i>=0){
+      var fig=figureOf(i);
+      if(!fig){ toast("That star is not part of a figure I know"); return }
+      if(fig.found){ toast("<b>"+fig.name+"</b> is already traced"); return }
+      if(!figureUp(fig)){
+        toast("<b>"+fig.name+"</b> is not fully above the horizon tonight");
+        return;
+      }
+      if(activeFig!==fig){
+        // starting a new figure: show its shape and how many stars it needs
+        activeFig=fig; picked=[i];
+        toast("<b>"+fig.name+"</b> &mdash; "+fig.si.length+" stars, follow the rings");
+        return;
+      }
+      var at=picked.indexOf(i);
+      if(at>=0) picked.splice(at,1); else picked.push(i);
+      tryComplete();
+      return;
+    }
+    picked=[]; activeFig=null; return;
+  }
+  charging=true; chargeStart=performance.now();
+  var dx0=b.x-walker.x, dy0=b.y-(GROUND-17);
+  walker.aim=Math.atan2(Math.min(dy0,-5),dx0);
+  walker.dir=dx0<0?-1:1;
+});
+window.addEventListener("pointerup",function(){
+  if(!charging) return;
+  charging=false; throwStone(charge); charge=0; fill.style.width="0%";
+});
+window.addEventListener("keydown",function(e){
+  noteActivity();
+  if(document.activeElement===pad) return;
+  if(e.code==="Space"){ e.preventDefault(); if(!charging){charging=true;chargeStart=performance.now()} }
+  if(e.code==="Escape"){ picked=[]; activeFig=null }
+  if(e.key==="h"||e.key==="H") document.body.classList.toggle("zen");
+  if(e.key===","||e.key==="<") turnView(-45);
+  if(e.key==="."||e.key===">") turnView(45);
+  if(e.key==="r"||e.key==="R") resetPanels();
+});
+window.addEventListener("keyup",function(e){
+  if(e.code==="Space"&&charging){charging=false;throwStone(charge);charge=0;fill.style.width="0%"}
+});
+
+// ---- Lively bridge ------------------------------------------------
+window.livelyPropertyListener=function(name,val){
+  switch(name){
+    case "latitude":  var v1=parseFloat(val); if(!isNaN(v1)){LAT=v1;updateClock()} break;
+    case "longitude": var v2=parseFloat(val); if(!isNaN(v2)){LON=v2;updateClock()} break;
+    case "fpsCap":    TARGET_FPS=val===0?30:60; break;
+    case "breakMins": BREAK_MINUTES=Math.max(1,val|0); break;
+    case "ambience":  autoSound=!!val; if(val){Snd.wake();Snd.startAmbience()}else{Snd.stopAmbience()} syncBtns(); break;
+    case "nocturne":  if(val){Snd.wake();Nocturne.start()}else{Nocturne.stop()} syncBtns(); break;
+    case "lofi":      autoLofi=!!val; if(val){Snd.wake();Lofi.start()}else{Lofi.stop()} syncBtns(); break;
+    case "showNotes":  document.getElementById("notes").style.display=val?"block":"none"; break;
+    case "showStones": document.getElementById("stones").style.display=val?"block":"none"; break;
+    case "showMedia":  document.getElementById("media").style.display=val?"block":"none"; break;
+    case "showSky":    document.getElementById("sky").dataset.off=val?"":"1"; renderSkyList(); break;
+    case "volume":     player.volume=Math.max(0,Math.min(1,val/100));
+                       if(Snd.master) Snd.master.gain.value=Math.max(0,Math.min(1,val/100)); break;
+    case "viewBearing":
+      VIEW = (val===0) ? null : ((val-1)*45);
+      store.set("tidepool.view", VIEW===null?"":String(VIEW));
+      updateClock(); break;
+    case "resetLayout": resetPanels(); break;
+    case "musicFile":  if(val){playlist=[{name:String(val).replace(/\.[^.]+$/,""),url:"media/"+val}];loadTrack(0)} break;
+    case "filmFile":   if(val){film.src="media/"+val;filmReady=true;screenOn=true;syncScr();film.play().catch(function(){})} break;
+  }
+};
+window.livelyAudioListener=function(data){
+  if(!data||!data.length) return;
+  extAudio=true; extDecay=0.6;
+  var s=0,n=Math.min(8,data.length);
+  for(var i=0;i<n;i++) s+=data[i];
+  level+=(s/n-level)*0.3;
+  for(var k=0;k<14;k++) bands[k]+=((data[k+1]||0)-bands[k])*0.35;
+};
+
+// ---- loop ---------------------------------------------------------
+var errShown=false;
+function reportError(err){
+  if(errShown) return; errShown=true;
+  if(window.console&&console.error) console.error("Tidepool:",err);
+  var d=document.createElement("div");
+  d.style.cssText="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:99;"+
+    "background:rgba(60,14,14,.92);border:1px solid #C4564A;padding:14px 18px;border-radius:3px;"+
+    "font:12px/1.6 monospace;color:#FFD3CD;max-width:560px";
+  d.textContent="Scene stopped: "+(err&&err.message?err.message:String(err));
+  document.body.appendChild(d);
+}
+
+var last=0,acc=0,running=true;
+function loop(now){
+  if(!running) return;
+  requestAnimationFrame(loop);
+  if(!last){last=now;return}
+  var dt=(now-last)/1000; last=now;
+  if(dt>0.25) dt=0.25;
+  acc+=dt;
+  if(acc<1/TARGET_FPS) return;
+  var step=acc; acc=0;
+  if(charging){ charge=Math.min(1,(now-chargeStart)/1100); fill.style.width=(charge*100)+"%" }
+  readLevel(step); paintEq();
+  stepWorld(step); stepWalker(step); stepStones(step); stepSplashes(step);
+  try{ draw(now/1000) }catch(err){ reportError(err); running=false }
+}
+document.addEventListener("visibilitychange",function(){
+  if(document.hidden){running=false}
+  else if(!running&&!errShown){running=true;last=0;requestAnimationFrame(loop)}
+});
+
+updateMoon(new Date()); updateTide(new Date());
+layout();
+window.addEventListener("resize",function(){
+  clearTimeout(window.__tpRz);
+  window.__tpRz=setTimeout(layout,140);
+});
+updateClock();
+setInterval(updateClock,1000);
+syncBtns();
+setTimeout(placePanels,60);
+var soundAnnounced=false, audioTries=0;
+
+function tryStartSound(fromGesture){
+  if(!autoSound) return;
+  if(!Snd.boot()) return;
+  Snd.wake();
+  if(!Snd.ambOn) Snd.startAmbience();
+  if(autoLofi && !Lofi.on) Lofi.start();
+  syncBtns();
+  if(Snd.ctx && Snd.ctx.state==="running" && !soundAnnounced){
+    soundAnnounced=true;
+    toast("Sea and wind &mdash; <b>all synthesised, no files</b>");
+    if(audioNag && audioNag.parentNode) audioNag.parentNode.removeChild(audioNag);
+    audioNag=null;
+  }
+}
+
+// Keep retrying quietly. Some hosts allow audio with no gesture at all;
+// others release it the moment the page is touched. Either way we get there.
+var audioPoll=setInterval(function(){
+  audioTries++;
+  if(Snd.ctx && Snd.ctx.state==="running"){
+    tryStartSound(false);
+    if(soundAnnounced){ clearInterval(audioPoll); audioPoll=null }
+    return;
+  }
+  tryStartSound(false);
+  if(audioTries>150){ clearInterval(audioPoll); audioPoll=null }
+},2000);
+
+function anyGesture(){ tryStartSound(true) }
+["pointerdown","keydown","pointermove","wheel"].forEach(function(ev){
+  window.addEventListener(ev,anyGesture,true);
+});
+
+// If audio is still blocked after a few seconds, say so plainly rather than
+// leaving the user wondering whether it is broken.
+var audioNag=null;
+setTimeout(function(){
+  tryStartSound(false);
+  if(!soundAnnounced){
+    audioNag=document.createElement("div");
+    audioNag.id="audioNag";
+    audioNag.innerHTML="Sound is waiting for a click on the wallpaper.<br>"+
+      "<span style='opacity:.7'>Desktop icons may be catching it \u2014 try hiding them, "+
+      "or press the Ambience button.</span>";
+    document.body.appendChild(audioNag);
+    audioNag.addEventListener("click",function(){ tryStartSound(true) });
+  }
+},6000);
+setTimeout(function(){ toast("<b>H</b> hides the widgets &mdash; drag any panel by its header") },2400);
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,106 @@
+{
+  "latitude": {
+    "text": "Latitude",
+    "type": "textbox",
+    "help": "Decimal degrees. Drives the real sun and the real stars.",
+    "value": "44.8878"
+  },
+  "longitude": {
+    "text": "Longitude",
+    "type": "textbox",
+    "help": "Decimal degrees, east positive.",
+    "value": "20.5178"
+  },
+  "viewBearing": {
+    "text": "Which way you are facing",
+    "type": "dropdown",
+    "help": "Automatic faces the equator, where the sun and moon are. Turn toward the pole for the circumpolar constellations.",
+    "value": 0,
+    "items": [
+      "Automatic",
+      "North",
+      "North-east",
+      "East",
+      "South-east",
+      "South",
+      "South-west",
+      "West",
+      "North-west"
+    ]
+  },
+  "ambience": {
+    "text": "Sea and wind",
+    "type": "checkbox",
+    "help": "Synthesised surf, swell and wind. No audio files.",
+    "value": false
+  },
+  "lofi": {
+    "text": "Generated lo-fi",
+    "type": "checkbox",
+    "help": "Endless lo-fi composed live in the browser. Never repeats.",
+    "value": false
+  },
+  "volume": {
+    "text": "Volume",
+    "type": "slider",
+    "min": 0,
+    "max": 100,
+    "value": 70
+  },
+  "fpsCap": {
+    "text": "Frame rate",
+    "type": "dropdown",
+    "value": 1,
+    "items": [
+      "30 fps",
+      "60 fps"
+    ]
+  },
+  "breakMins": {
+    "text": "Break reminder after (minutes)",
+    "type": "slider",
+    "help": "A bird lands when you have been idle this long. It never locks anything.",
+    "min": 5,
+    "max": 120,
+    "value": 20
+  },
+  "musicFile": {
+    "text": "Your music",
+    "type": "folderDropdown",
+    "folder": "media",
+    "filter": "*.mp3|*.m4a|*.ogg|*.wav|*.flac",
+    "value": ""
+  },
+  "filmFile": {
+    "text": "Film on the beach screen",
+    "type": "folderDropdown",
+    "folder": "media",
+    "filter": "*.mp4|*.webm",
+    "value": ""
+  },
+  "showSky": {
+    "text": "Show constellation panel",
+    "type": "checkbox",
+    "value": true
+  },
+  "showNotes": {
+    "text": "Show notes",
+    "type": "checkbox",
+    "value": true
+  },
+  "showStones": {
+    "text": "Show skipping stones",
+    "type": "checkbox",
+    "value": true
+  },
+  "showMedia": {
+    "text": "Show sound panel",
+    "type": "checkbox",
+    "value": true
+  },
+  "resetLayout": {
+    "text": "Put the widgets back",
+    "type": "button",
+    "value": "Reset"
+  }
+}

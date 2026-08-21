@@ -1,0 +1,14 @@
+{
+  "AppVersion": "2.1.0.0",
+  "Title": "Tidepool",
+  "Thumbnail": "thumbnail.jpg",
+  "Preview": "preview.gif",
+  "Desc": "A cozy coast that runs on your real clock and your real sky. Sixty catalogued stars projected to your latitude, NOAA sunrise and sunset, skipping stones, notes, and every sound synthesised from scratch. No network requests, no external assets.",
+  "Author": "Hristo",
+  "License": "MIT",
+  "Contact": "",
+  "Type": 5,
+  "FileName": "index.html",
+  "Arguments": "",
+  "IsAbsolutePath": false
+}

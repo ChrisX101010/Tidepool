@@ -1,0 +1,5 @@
+media/*
+!media/README.txt
+*.zip
+Thumbs.db
+desktop.ini
