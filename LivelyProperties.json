@@ -56,6 +56,36 @@
       "60 fps"
     ]
   },
+  "quality": {
+    "text": "Render quality",
+    "type": "dropdown",
+    "value": 0,
+    "help": "Automatic watches the frame time and adjusts itself. Higher is sharper on large screens.",
+    "items": [
+      "Automatic",
+      "Low",
+      "Standard",
+      "Sharp"
+    ]
+  },
+  "clockSize": {
+    "text": "Clock size",
+    "type": "slider",
+    "min": 10,
+    "max": 100,
+    "value": 36,
+    "help": "How large the time and date are drawn."
+  },
+  "clockAlign": {
+    "text": "Clock position",
+    "type": "dropdown",
+    "value": 0,
+    "items": [
+      "Left",
+      "Centred",
+      "Right"
+    ]
+  },
   "breakMins": {
     "text": "Break reminder after (minutes)",
     "type": "slider",

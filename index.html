@@ -53,21 +53,32 @@
     letter-spacing:.24em;text-transform:uppercase;color:var(--dim);opacity:0;transition:opacity .4s}
   body.zen #zentag{opacity:.35}
 
+  #clock[data-align="center"] .bd,#clock[data-align="center"]{text-align:center}
+  #clock[data-align="right"] .bd,#clock[data-align="right"]{text-align:right}
   #clock{background:none;border:none;backdrop-filter:none;box-shadow:none}
   #clock::after{display:none}
   #clock:hover{box-shadow:none;border-color:transparent}
   #clock .hd{display:none}
   #clock .bd{padding:0;text-shadow:0 2px 18px rgba(0,0,0,.75)}
-  #time{font-size:calc(56px*var(--ui));font-weight:300;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
-  #date{margin-top:calc(5px*var(--ui));font-size:calc(11px*var(--ui));letter-spacing:.28em;text-transform:uppercase;color:var(--dim)}
-  #tideline{margin-top:calc(2px*var(--ui));font-size:calc(11px*var(--ui));letter-spacing:.28em;
+  #time{font-size:calc(56px*var(--ui)*var(--clock,1));font-weight:300;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+  #date{margin-top:calc(5px*var(--ui));font-size:calc(11px*var(--ui)*var(--clock,1));letter-spacing:.28em;text-transform:uppercase;color:var(--dim)}
+  #tideline{margin-top:calc(2px*var(--ui));font-size:calc(11px*var(--ui)*var(--clock,1));letter-spacing:.28em;
     text-transform:uppercase;color:var(--dim);opacity:.8}
-  #solar{margin-top:calc(2px*var(--ui));font-size:calc(11px*var(--ui));letter-spacing:.28em;text-transform:uppercase;color:var(--tide);opacity:.85}
+  #solar{margin-top:calc(2px*var(--ui));font-size:calc(11px*var(--ui)*var(--clock,1));letter-spacing:.28em;text-transform:uppercase;color:var(--tide);opacity:.85}
 
   #notes{width:calc(268px*var(--ui))}
   #notepad{width:100%;min-height:calc(132px*var(--ui));max-height:30vh;resize:vertical;background:transparent;border:none;
     outline:none;color:var(--ink);font-family:var(--mono);font-size:calc(13px*var(--ui));line-height:1.7;display:block}
   #notepad::placeholder{color:var(--dim);opacity:.5}
+  /* the default Windows scrollbar is a wide grey slab that breaks the mood */
+  #notepad{scrollbar-width:thin;scrollbar-color:rgba(234,242,240,.24) transparent}
+  #notepad::-webkit-scrollbar{width:calc(5px*var(--ui));height:calc(5px*var(--ui))}
+  #notepad::-webkit-scrollbar-track{background:transparent}
+  #notepad::-webkit-scrollbar-thumb{
+    background:linear-gradient(180deg,rgba(234,242,240,.30),rgba(234,242,240,.14));
+    border-radius:99px}
+  #notepad::-webkit-scrollbar-thumb:hover{background:rgba(234,242,240,.44)}
+  #notepad::-webkit-scrollbar-corner{background:transparent}
   #saved{margin-top:6px;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);
     opacity:0;transition:opacity .24s}
   #saved.show{opacity:.8}
@@ -177,6 +188,7 @@
   <div class="bd">
     <div class="row"><span>Last throw</span><span id="last">&mdash;</span></div>
     <div class="row"><span>Best</span><span id="best">0</span></div>
+    <div class="row"><span>Gulls startled</span><span id="startled">0</span></div>
     <div id="charge"><div id="chargeFill"></div></div>
     <div id="hint">Aim low and flat for a long run</div>
   </div>
@@ -206,7 +218,7 @@
 <div id="starinfo"></div>
 <div id="toasts"></div>
 <div id="zentag">Press H for the widgets</div>
-<div id="colophon">Tidepool v15<br>No network &middot; real sky &middot; synthesised sound</div>
+<div id="colophon">Tidepool v17<br>No network &middot; real sky &middot; synthesised sound</div>
 
 <input type="file" id="audioInput" accept="audio/*" multiple>
 <input type="file" id="videoInput" accept="video/*">
@@ -933,9 +945,33 @@ for(var fi0=0;fi0<FIGURES.length;fi0++){
   Fx.si=Fx.stars.map(si).filter(function(i){return i>=0});
   Fx.li=Fx.lines.map(function(p){return [si(p[0]),si(p[1])]})
                 .filter(function(p){return p[0]>=0&&p[1]>=0});
-  Fx.found=store.get("tidepool.found."+Fx.name,"")==="1";
+  Fx.found=false;   // set below, per night
 }
 var starPos=new Float32Array(STARS.length*3);
+
+// The sky turns, so the puzzle should turn with it. Progress is kept per
+// night (a night belongs to the day it started, so 02:00 still counts as
+// the previous evening) and a fresh set is waiting each dusk.
+function nightKey(d){
+  d=d||new Date();
+  var x=new Date(d.getTime());
+  if(x.getHours()<6) x.setDate(x.getDate()-1);
+  return x.getFullYear()+"-"+(x.getMonth()+1)+"-"+x.getDate();
+}
+var TONIGHT=nightKey();
+function loadFound(){
+  var raw=store.get("tidepool.found."+TONIGHT,"");
+  var set=raw?raw.split("|"):[];
+  for(var i=0;i<FIGURES.length;i++) FIGURES[i].found=set.indexOf(FIGURES[i].name)>=0;
+}
+function saveFound(){
+  var out=[];
+  for(var i=0;i<FIGURES.length;i++) if(FIGURES[i].found) out.push(FIGURES[i].name);
+  store.set("tidepool.found."+TONIGHT,out.join("|"));
+  var all=parseInt(store.get("tidepool.tracedTotal","0"),10)||0;
+  store.set("tidepool.tracedTotal",String(all+1));
+}
+loadFound();
 (function(){ var v=store.get("tidepool.view",""); if(v!=="") VIEW=parseFloat(v) })();
 
 function julian(d){
@@ -1090,13 +1126,16 @@ function hx(c){return [parseInt(c.substr(1,2),16),parseInt(c.substr(3,2),16),par
 function h2(v){v=Math.max(0,Math.min(255,Math.round(v)));return (v<16?"0":"")+v.toString(16)}
 function mix(a,b,k){var A=hx(a),B=hx(b);
   return "#"+h2(A[0]+(B[0]-A[0])*k)+h2(A[1]+(B[1]-A[1])*k)+h2(A[2]+(B[2]-A[2])*k)}
-var sky={top:"#060A14",bot:"#0D1626",sea:"#0A1722",sand:"#1D2230",glow:1};
+var sky={top:"#060A14",bot:"#0D1626",sea:"#0A1722",sand:"#1D2230",glow:1,mid:"#0A1120"};
+var skyGrad=null, skyGradKey="";
 function updatePalette(alt){
   var i=0; while(i<STOPS.length-2&&alt>STOPS[i+1].a) i++;
   var a=STOPS[i],b=STOPS[i+1],k=Math.max(0,Math.min(1,(alt-a.a)/(b.a-a.a)));
   sky.top=mix(a.top,b.top,k); sky.bot=mix(a.bot,b.bot,k);
   sky.sea=mix(a.sea,b.sea,k); sky.sand=mix(a.sand,b.sand,k);
   sky.glow=a.glow+(b.glow-a.glow)*k;
+  sky.mid=mix(sky.top,sky.bot,0.72);   // computed once a second, not per frame
+  skyGrad=null;                        // palette moved, so rebuild the gradient
 }
 
 var cv=document.getElementById("scene"), ctx=cv.getContext("2d",{alpha:false});
@@ -1104,13 +1143,19 @@ ctx.imageSmoothingEnabled=false;
 
 // Landmarks live at fractions of the width, so an ultrawide monitor gets more
 // coastline rather than a vertical crop of the same picture.
-var LM={};
+var LM={}, Q=2;   // supersample factor: the buffer is Q times the design grid
 function layout(){
   var aspect=(window.innerWidth||1920)/(window.innerHeight||1080);
   var want=Math.round(H*aspect);
   W=Math.max(510,Math.min(1180,want));
   if(W%2) W++;
-  cv.width=W; cv.height=H;
+  // Draw coordinates stay in design units; the backing store is Q times
+  // larger. Flat fills look identical, but gradients, circles and video get
+  // Q times the resolution, and the final stretch to the screen is far
+  // gentler — which is the whole of the "it looks softer in a browser"
+  // problem, since a windowed canvas was being upscaled far less.
+  cv.width=W*Q; cv.height=H*Q;
+  ctx.setTransform(Q,0,0,Q,0,0);
   ctx.imageSmoothingEnabled=false;
 
   LM.pier   = 52;
@@ -1273,7 +1318,14 @@ function stepWorld(dt){
     if(S.x<-110||S.x>W+110) ships.splice(s,1);
   }
 
-  if(day){
+  if(gullsBanished>0){
+    gullsBanished-=dt;
+    if(gullsBanished<=0){
+      startleRun=0; kindShown=false;
+      toast("A gull is back. <b>Give it some peace this time.</b>",8000);
+    }
+  }
+  if(day && gullsBanished<=0){
     timers.gull-=dt;
     if(timers.gull<=0){ if(gulls.length<8) spawnGull(); timers.gull=1.4+Math.random()*4.2 }
   }
@@ -1339,32 +1391,37 @@ function stepWorld(dt){
   if(timers.pod<=0 && day){
     if(pods.length<2){
       var dir=Math.random()<0.5?1:-1;
-      var n=2+Math.floor(Math.random()*3);
-      var depth=0.03+Math.random()*0.16;
-      var baseY=HORIZON+3+depth*30;
-      var startX=dir>0?-30:W+30;
+      var n=2+Math.floor(Math.random()*2);
+      var depth=0.01+Math.random()*0.05;      // right out on the horizon
+      var baseY=HORIZON+1+depth*14;
+      // stay in the open channel, clear of the headland and the island
+      var lo=96, hi=W-96;
+      var startX = dir>0 ? lo-24 : hi+24;
       for(var d=0;d<n;d++)
         pods.push({x:startX-dir*d*13, y:baseY, dir:dir, depth:depth,
                    v:(26+Math.random()*12)*dir, phase:Math.random()*3.14, arc:0,
                    period:1.5+Math.random()*0.5, sc:0.55+depth*0.9, blown:false});
     }
-    timers.pod=70+Math.random()*150;
+    timers.pod=260+Math.random()*420;
   }
   for(var pd=pods.length-1;pd>=0;pd--){
     var P=pods[pd];
     P.x+=P.v*dt; P.phase+=dt*(6.283/P.period);
-    P.arc=Math.sin(P.phase);
-    if(P.x<-46||P.x>W+46) pods.splice(pd,1);
+    var was=P.arc; P.arc=Math.sin(P.phase);
+    // a small ring each time it re-enters the water
+    if(was>0 && P.arc<=0 && P.x>90 && P.x<W-90)
+      ripples.push({x:P.x,y:P.y,r:0,life:0.45});
+    if(P.x<96-40||P.x>W-96+40) pods.splice(pd,1);
   }
 
   timers.whale-=dt;
   if(timers.whale<=0 && !whale && day){
     // far out, only just breaking the horizon, and genuinely rare
     whale={x:Math.random()<0.5?-70:W+70, y:HORIZON+1+Math.random()*4,
-           dir:0, v:0, t:0, spout:0, sc:0.55};
+           dir:0, v:0, t:0, spout:0, sc:0.42};
     whale.dir=whale.x<0?1:-1; whale.v=9*whale.dir;
   }
-  if(timers.whale<=0) timers.whale=1500+Math.random()*2400;
+  if(timers.whale<=0) timers.whale=2700+Math.random()*4200;
   if(whale){
     whale.x+=whale.v*dt; whale.t+=dt;
     var cyc=(whale.t%16)/16;
@@ -1467,6 +1524,9 @@ function stepWorld(dt){
   if(Math.random()<dt*0.06) wind.gust=0.5+Math.random()*0.9;
   wind.base=0.42+0.3*Math.sin(wind.phase)+0.15*Math.sin(wind.phase*2.7);
   wind.val=Math.max(0.05,Math.min(1.8,wind.base+wind.gust));
+
+  // the tally of startled gulls settles down if you leave them be
+  if(startleCool>0){ startleCool-=dt; if(startleCool<=0){ startleRun=0; kindShown=false } }
 
   lightPhase+=dt;
 
@@ -1835,10 +1895,14 @@ function drawPods(){
       ctx.fillRect(P.dir>0?x-1:x+L,y+1,1,1);
     }
     ctx.globalAlpha=1;
-    // splash where it broke the surface
-    if(a>0.08&&a<0.30){
-      ctx.fillStyle="rgba(255,255,255,"+(0.5*(1-Math.abs(a-0.19)/0.11))+")";
+    // the water parting as it breaks and re-enters — small, at this distance
+    if(a>0.05&&a<0.34){
+      var f=1-Math.abs(a-0.19)/0.15;
+      ctx.fillStyle="rgba(255,255,255,"+(0.42*f)+")";
       ctx.fillRect(x-1,Math.round(P.y),L+2,1);
+      ctx.fillStyle="rgba(255,255,255,"+(0.20*f)+")";
+      ctx.fillRect(x-2,Math.round(P.y)-1,2,1);
+      ctx.fillRect(x+L,Math.round(P.y)-1,2,1);
     }
   }
 }
@@ -1931,14 +1995,7 @@ function drawBeachDetail(t, shoreY){
     var pr=prints[fI];
     ctx.fillStyle="rgba(0,0,0,"+(0.16*pr.life)+")";
     ctx.fillRect(pr.x|0,pr.y|0,2,1);
-    if(bioBloom>0.05 && pr.life>0.55){
-      // wet sand flashes where he has just trodden
-      var g=(pr.life-0.55)/0.45*bioBloom;
-      ctx.fillStyle="rgba(120,250,235,"+(g*0.55)+")";
-      ctx.fillRect(pr.x|0,pr.y|0,2,1);
-      ctx.fillStyle="rgba(120,250,235,"+(g*0.14)+")";
-      ctx.fillRect((pr.x-2)|0,(pr.y-2)|0,6,5);
-    }
+
   }
   // the beached rowing boat
   var b=beachProps.boat;
@@ -2135,10 +2192,15 @@ function drawRockSurf(t){
       var fx=SP.x+x;
       if(fx<-2||fx>W+2) continue;
       var edge=Math.sin(x*0.19+sd)*1.6+Math.sin(x*0.07-sd*1.7)*1.3+Math.sin(x*0.41+sd*2.3)*0.7;
+      // the wash reads as a moving film: soft at the edges, denser in the
+      // middle, and it thins toward the ends of the break
       var lump=0.45+0.55*Math.sin(x*0.3+sd*3.1);
-      var h=1+Math.round(e*3.0*lump);
-      ctx.fillStyle="rgba(255,255,255,"+(0.30*e*(0.6+lump*0.6))+")";
+      var along=1-Math.pow(Math.abs(x)/(SP.w/2),1.7);
+      var h=Math.max(1,Math.round(e*2.2*lump*along+0.4));
+      ctx.fillStyle="rgba(255,255,255,"+(0.20*e*(0.5+lump*0.5)*along)+")";
       ctx.fillRect(fx|0,(SP.y+edge-1)|0,2,h);
+      ctx.fillStyle="rgba(214,238,244,"+(0.13*e*along)+")";
+      ctx.fillRect(fx|0,(SP.y+edge)|0,2,1);
     }
     // plumes: count, position, height and lean all differ per break
     var plumes=2+Math.floor((Math.sin(sd*5.1)*0.5+0.5)*4);
@@ -2146,13 +2208,14 @@ function drawRockSurf(t){
       var frac=(q+0.5)/plumes;
       var jitter=Math.sin(sd*7.3+q*2.9);
       var pxp=SP.x+(frac-0.5)*SP.w*0.9+jitter*4;
-      var peak=(1.8+Math.abs(Math.sin(sd*3.7+q*1.9))*4.2)*e*2.4*mag;
+      var peak=(1.4+Math.abs(Math.sin(sd*3.7+q*1.9))*3.0)*e*1.9*mag;
       var hh=Math.max(1,Math.round(peak));
-      var lean=Math.round(jitter*wind.val*1.6);
-      ctx.fillStyle="rgba(255,255,255,"+(0.24*e)+")";
+      var lean=Math.round(jitter*wind.val*1.4);
       for(var yy=0;yy<hh;yy++){
         var g=yy/hh;
-        ctx.fillRect(Math.round(pxp+lean*g),(SP.y-yy)|0,g>0.6?1:2,1);
+        // fades as it rises, so the plume dissolves instead of stopping dead
+        ctx.fillStyle="rgba(255,255,255,"+(0.20*e*(1-g*0.8))+")";
+        ctx.fillRect(Math.round(pxp+lean*g),(SP.y-yy)|0,g>0.55?1:2,1);
       }
       // droplets flung clear at the top of the plume
       if(e>0.35){
@@ -2160,7 +2223,7 @@ function drawRockSurf(t){
         for(var dI=0;dI<dn;dI++){
           var dxp=pxp+lean+ (dI-1)*2 + Math.sin(sd*13+q+dI)*3;
           var dyp=SP.y-hh-1-dI*2-Math.round(e*3);
-          ctx.fillStyle="rgba(255,255,255,"+(0.20*e*(1-dI*0.25))+")";
+          ctx.fillStyle="rgba(255,255,255,"+(0.15*e*(1-dI*0.3))+")";
           ctx.fillRect(dxp|0,dyp|0,1,1);
         }
       }
@@ -2168,10 +2231,11 @@ function drawRockSurf(t){
     // backwash draining off the rocks as it collapses
     if(p>riseT+0.25 && e>0.10){
       var bw=(p-riseT-0.25)/fallT;
-      ctx.fillStyle="rgba(255,255,255,"+(0.14*e)+")";
       for(var bx2=-SP.w/2;bx2<SP.w/2;bx2+=3){
-        if(Math.sin(bx2*0.5+sd*4)>0.1)
-          ctx.fillRect((SP.x+bx2)|0,(SP.y+1+bw*3)|0,2,1);
+        var n2=Math.sin(bx2*0.5+sd*4);
+        if(n2<0.1) continue;
+        ctx.fillStyle="rgba(226,242,246,"+(0.10*e*n2)+")";
+        ctx.fillRect((SP.x+bx2)|0,(SP.y+1+bw*3)|0,2,1);
       }
     }
   }
@@ -2425,7 +2489,11 @@ function drawWalker(){
 // ---- stones -------------------------------------------------------
 var stones=[],ripples=[],splashes=[],charging=false,chargeStart=0,charge=0;
 var best=parseInt(store.get("tidepool.best","0"),10)||0;
+var startled=parseInt(store.get("tidepool.startled","0"),10)||0;
+var startleRun=0, startleCool=0, kindShown=false;
+var gullsBanished=0;      // seconds until they trust the beach again
 document.getElementById("best").textContent=best;
+document.getElementById("startled").textContent=startled;
 var mouseB={x:240,y:120};
 
 function throwStone(p){
@@ -2442,6 +2510,43 @@ function stepStones(dt){
     s.x+=s.vx*dt; s.y+=s.vy*dt; s.vy+=200*dt;
     s.age+=dt;
     if(!s.launched && (s.age>0.05 || Math.abs(s.x-s.x0)>7)) s.launched=true;
+
+    // a stone can startle a gull flying low enough to reach. Nothing is hurt —
+    // they squawk and climb away — but it should not become the point.
+    if(s.launched && !s.hitBird){
+      for(var gb=0;gb<gulls.length;gb++){
+        var GB=gulls[gb];
+        if(GB.state==="flee") continue;
+        if(Math.abs(s.x-GB.x)<5 && Math.abs(s.y-GB.y)<5){
+          s.hitBird=true;
+          GB.state="flee"; Snd.squeak();
+          pop(GB.x-2,GB.y-10,"!","#EAF2F0");
+          for(var g3=0;g3<gulls.length;g3++){
+            var G3=gulls[g3];
+            if(G3!==GB && Math.abs(G3.x-GB.x)<80 && Math.random()<0.8) G3.state="flee";
+          }
+          startled++; store.set("tidepool.startled",String(startled));
+          document.getElementById("startled").textContent=startled;
+          startleRun++; startleCool=30;
+          if(startleRun===1) toast("You startled a gull &mdash; <b>"+startled+" so far</b>");
+          else if(startleRun===3 && !kindShown){
+            kindShown=true;
+            toast("They are only after breakfast. <b>Be kind, even to the noisy ones.</b>",9000);
+          }
+          else if(startleRun>=5 && gullsBanished<=0){
+            // they have had enough. The whole flock goes, and the beach is
+            // quiet for a while — which is the point.
+            for(var g4=0;g4<gulls.length;g4++) gulls[g4].state="flee";
+            gullsBanished=240;
+            Snd.chime(52);
+            toast("They have gone. <b>Are you happy now?</b>",11000);
+            setTimeout(function(){
+              toast("The beach is quieter without them.",9000) },13000);
+          }
+          break;
+        }
+      }
+    }
     var surfY=EDGE-tide.height*8-3;
     if(s.y>=surfY && s.vy>0 && s.launched){
       // Angle of attack decides everything. A stone arriving almost flat
@@ -2494,6 +2599,7 @@ function finish(n){
   el.textContent=n+(n===1?" skip":" skips");
   if(n>best){
     best=n; document.getElementById("best").textContent=best;
+document.getElementById("startled").textContent=startled;
     store.set("tidepool.best",String(best));
     if(n>=5){
       toast("New best &mdash; <b>"+n+" skips</b>"+(n>=12?" &mdash; that was a good one":""));
@@ -2780,9 +2886,15 @@ scrBtn.addEventListener("click",function(){
 
 // ---- scene --------------------------------------------------------
 function draw(t){
-  var g=ctx.createLinearGradient(0,0,0,HORIZON);
-  g.addColorStop(0,sky.top); g.addColorStop(0.72,mix(sky.top,sky.bot,0.72)); g.addColorStop(1,sky.bot);
-  ctx.fillStyle=g; ctx.fillRect(0,0,W,HORIZON);
+  var gkey=sky.top+sky.bot+HORIZON;
+  if(!skyGrad||skyGradKey!==gkey){
+    skyGrad=ctx.createLinearGradient(0,0,0,HORIZON);
+    skyGrad.addColorStop(0,sky.top);
+    skyGrad.addColorStop(0.72,sky.mid);
+    skyGrad.addColorStop(1,sky.bot);
+    skyGradKey=gkey;
+  }
+  ctx.fillStyle=skyGrad; ctx.fillRect(0,0,W,HORIZON);
 
   drawStars(t); drawMeteors(); drawClouds();
 
@@ -2840,8 +2952,6 @@ function draw(t){
   drawPods();
   drawWhale();
   drawShips();
-  drawBuoy(t);
-  drawMoorings(t);
 
   // the far water is not empty: a fine stipple of distant ripple, too small
   // to resolve into waves, which is what the flat band was missing
@@ -2867,24 +2977,35 @@ function draw(t){
     var flow=0.30+tide.current*0.55;
     var speed=reduced?0:t*(0.34-f*0.17)*flow;
     var alpha=0.03+f*f*0.24;
-    var bio=bioBloom*f*f;
+    var bio=bioBloom*f*f, glowRow=(bio>0.05);
+    // one path for the row, one fill: far cheaper than a fillRect per column
+    ctx.fillStyle="rgba(234,242,240,"+alpha+")";
+    ctx.beginPath();
     for(var x=0;x<W;x+=2){
       var ph=x*(0.055-f*0.028)+speed*1.7+w*0.8;
       var crest=Math.sin(ph);
+      if(glowRow && crest>0.35) continue;         // drawn in the glow pass
       var yy2=wy+crest*amp+Math.sin(ph*0.37+w)*amp*0.4;
-      var thick=1+(f>0.72&&crest>0.55?1:0);
-      if(bio>0.05 && crest>0.35){
-        // the breaking edge lights up blue-green where the water is strained
-        ctx.fillStyle="rgba(90,240,225,"+(bio*0.55*(crest-0.35)/0.65)+")";
-        ctx.fillRect(x,yy2|0,2,thick);
-        ctx.fillStyle="rgba(150,255,240,"+(bio*0.22)+")";
-        ctx.fillRect(x,(yy2|0)-1,2,1);
-      } else {
-        ctx.fillStyle="rgba(234,242,240,"+alpha+")";
-        ctx.fillRect(x,yy2|0,2,thick);
+      ctx.rect(x,yy2|0,2,1+(f>0.72&&crest>0.55?1:0));
+    }
+    ctx.fill();
+    if(glowRow){
+      ctx.fillStyle="rgba(90,240,225,"+(bio*0.4)+")";
+      ctx.beginPath();
+      for(var x2=0;x2<W;x2+=2){
+        var ph2=x2*(0.055-f*0.028)+speed*1.7+w*0.8;
+        var c2=Math.sin(ph2);
+        if(c2<=0.35) continue;
+        var y3=wy+c2*amp+Math.sin(ph2*0.37+w)*amp*0.4;
+        ctx.rect(x2,y3|0,2,1+(f>0.72&&c2>0.55?1:0));
       }
+      ctx.fill();
     }
   }
+
+  // moored craft sit ON the water, so they go over the swell, not under it
+  drawBuoy(t);
+  drawMoorings(t);
 
   drawHeadland(t);
   drawRockSurf(t);
@@ -2920,12 +3041,13 @@ function draw(t){
     var fe2=shoreY(fx3)+surge+2+Math.sin(fx3*0.11+t*1.3)*1.1;
     ctx.fillRect(fx3,fe2|0,2,1);
   }
-  // dry sand speckle, for texture
+  // dry sand speckle: fixed positions, so it can be drawn as one path
   ctx.fillStyle="rgba(0,0,0,0.06)";
+  ctx.beginPath();
   for(var d=0;d<70;d++){
-    var dx=(d*67)%W, dy=EDGE+12+((d*37)%(H-EDGE-14));
-    ctx.fillRect(dx,dy,1,1);
+    ctx.rect((d*67)%W, EDGE+12+((d*37)%(H-EDGE-14)), 1,1);
   }
+  ctx.fill();
 
   drawCinema(t);
   drawBeachDetail(t, shoreY);
@@ -2958,7 +3080,7 @@ function drawAnkleWash(t, shoreY){
   var top=base+reach+wob;
   if(top<GROUND-3) return;                 // water has not reached him yet
   var band=Math.min(3,Math.max(1,top-(GROUND-3)));
-  var bio=bioBloom>0.05;
+  var bio=false;   // he is standing on sand, not in the bloom
   // a thin, uneven film rather than a solid block: each column gets its own
   // depth, so the edge is ragged the way water on sand actually is
   for(var wxp=-5;wxp<=5;wxp++){
@@ -3003,17 +3125,15 @@ function drawWash(t, shoreY){
     ctx.fillStyle="rgba(150,196,206,"+(0.10+0.08*cyc)+")";
     ctx.fillRect(x,Math.round(base),2,Math.round(depth));
     // the bright lip at the furthest point of the run
-    if(bioBloom>0.05){
-      ctx.fillStyle="rgba(120,250,235,"+((0.42+0.34*lead)*bioBloom+0.12)+")";
-      ctx.fillRect(x,Math.round(top),2,1);
-      ctx.fillStyle="rgba(70,220,215,"+(bioBloom*0.18)+")";
-      ctx.fillRect(x,Math.round(top)-1,2,1);
-      ctx.fillStyle="rgba(255,255,255,"+((0.42+0.34*lead)*(1-bioBloom))+")";
-      ctx.fillRect(x,Math.round(top),2,1);
-    } else {
-      ctx.fillStyle="rgba(255,255,255,"+(0.42+0.34*lead)+")";
+    // the glow lives in the water; once the sheet is up the sand it is
+    // just white foam again
+    var seaward = top < base+3;
+    if(bioBloom>0.05 && seaward){
+      ctx.fillStyle="rgba(120,250,235,"+((0.34+0.26*lead)*bioBloom+0.10)+")";
       ctx.fillRect(x,Math.round(top),2,1);
     }
+    ctx.fillStyle="rgba(255,255,255,"+((0.42+0.34*lead)*(seaward?(1-bioBloom*0.5):1))+")";
+    ctx.fillRect(x,Math.round(top),2,1);
     ctx.fillStyle="rgba(255,255,255,0.18)";
     ctx.fillRect(x,Math.round(top)-1,2,1);
   }
@@ -3038,29 +3158,31 @@ function drawHeadland(t){
   // ---- the headland: layered rock, not one flat wedge -----------------
   ctx.fillStyle=rock2;
   ctx.beginPath();
-  ctx.moveTo(0,HORIZON+4); ctx.lineTo(0,HORIZON-11);
-  ctx.lineTo(13,HORIZON-15); ctx.lineTo(26,HORIZON-12);
-  ctx.lineTo(41,HORIZON-4); ctx.lineTo(58,HORIZON+1); ctx.lineTo(74,HORIZON+4);
+  ctx.moveTo(0,HORIZON+4); ctx.lineTo(0,HORIZON-13);
+  ctx.lineTo(7,HORIZON-17);
+  ctx.lineTo(30,HORIZON-17);          // a flat headland for the tower to sit on
+  ctx.lineTo(38,HORIZON-14); ctx.lineTo(50,HORIZON-7);
+  ctx.lineTo(64,HORIZON); ctx.lineTo(80,HORIZON+4);
   ctx.closePath(); ctx.fill();
   // upper bluff, catching whatever light there is
   ctx.fillStyle=rock3;
   ctx.beginPath();
-  ctx.moveTo(0,HORIZON-11); ctx.lineTo(13,HORIZON-15);
-  ctx.lineTo(24,HORIZON-13); ctx.lineTo(20,HORIZON-9); ctx.lineTo(0,HORIZON-7);
+  ctx.moveTo(0,HORIZON-13); ctx.lineTo(7,HORIZON-17);
+  ctx.lineTo(30,HORIZON-17); ctx.lineTo(34,HORIZON-12); ctx.lineTo(0,HORIZON-9);
   ctx.closePath(); ctx.fill();
   // a scrub line along the crest
   ctx.fillStyle=grass;
-  ctx.fillRect(2,HORIZON-13,9,2); ctx.fillRect(14,HORIZON-16,7,2);
-  ctx.fillRect(23,HORIZON-14,6,2);
+  ctx.fillRect(1,HORIZON-15,6,2); ctx.fillRect(24,HORIZON-18,8,2);
+  ctx.fillRect(34,HORIZON-13,9,2); ctx.fillRect(47,HORIZON-7,8,2);
   // dark cut of rock at the waterline, and boulders at the foot
   ctx.fillStyle=rock;
-  ctx.fillRect(0,HORIZON+1,62,3);
-  ctx.fillRect(44,HORIZON-1,7,3); ctx.fillRect(53,HORIZON,6,3);
-  ctx.fillRect(36,HORIZON+1,5,2);
+  ctx.fillRect(0,HORIZON+1,70,3);
+  ctx.fillRect(52,HORIZON-1,7,3); ctx.fillRect(61,HORIZON,6,3);
+  ctx.fillRect(43,HORIZON+1,6,2); ctx.fillRect(34,HORIZON+2,5,2);
 
   // ---- the lighthouse, centred on its own plinth ----------------------
-  var LX=17;                         // trunk centre
-  var base=HORIZON-15;
+  var LX=18;                         // trunk centre, well inside the plateau
+  var base=HORIZON-17;
   ctx.fillStyle=rock;
   ctx.fillRect(LX-5,base-1,11,3);    // plinth, symmetric about LX
   ctx.fillStyle=night?"#0B131D":"#C9C3B6";
@@ -3247,6 +3369,11 @@ function updateClock(){
     }
     else if(phase==="day") toast("Sunrise");
   }
+  var nk=nightKey(d);
+  if(nk!==TONIGHT){
+    TONIGHT=nk; loadFound(); picked=[]; activeFig=null;
+    if(phase==="night"||phase==="blue") toast("A new night &mdash; <b>fresh constellations to find</b>",8000);
+  }
   lastPhase=phase;
   updateMoon(d); updateTide(d);
   var tl=document.getElementById("tideline");
@@ -3321,11 +3448,14 @@ function renderSkyList(){
     if(!figureUp(F)) continue;
     n++; rows.push(F.found?"<b>"+F.name+"</b>":F.name);
   }
-  var done=0; for(var k=0;k<FIGURES.length;k++) if(FIGURES[k].found) done++;
+  var done=0, upc=0;
+  for(var k=0;k<FIGURES.length;k++){ if(FIGURES[k].found) done++; if(figureUp(FIGURES[k])) upc++ }
   var pts=["north","north-east","east","south-east","south","south-west","west","north-west"];
   var look="Looking "+pts[Math.round(facing()/45)%8];
+  var lifetime=parseInt(store.get("tidepool.tracedTotal","0"),10)||0;
   list.innerHTML=rows.join("<br>")+
-    "<br><span style='opacity:.6'>"+done+" of "+FIGURES.length+" traced &middot; "+look+"</span>";
+    "<br><span style='opacity:.6'>"+done+" of "+upc+" tonight"+
+    (lifetime>done?" &middot; "+lifetime+" all time":"")+" &middot; "+look+"</span>";
 }
 
 // ---- notes --------------------------------------------------------
@@ -3424,7 +3554,18 @@ function placePanels(){
     sky.style.left="auto"; sky.style.bottom="auto";
   }
   var clock=document.getElementById("clock");
-  if(clock && !clock.dataset.moved){ clock.style.top=m+"px"; clock.style.left=m+"px" }
+  if(clock && !clock.dataset.moved){
+    clock.style.top=m+"px";
+    var al=clock.dataset.align||"left";
+    if(al==="center"){
+      clock.style.left=Math.round((window.innerWidth-clock.offsetWidth)/2)+"px";
+      clock.style.right="auto";
+    } else if(al==="right"){
+      clock.style.right=m+"px"; clock.style.left="auto";
+    } else {
+      clock.style.left=m+"px"; clock.style.right="auto";
+    }
+  }
   var stones=document.getElementById("stones");
   if(stones && !stones.dataset.moved){
     stones.style.bottom=m+"px"; stones.style.left=m+"px";
@@ -3474,8 +3615,11 @@ function tryComplete(){
     var all=true;
     for(var i=0;i<F.si.length;i++) if(picked.indexOf(F.si[i])<0){all=false;break}
     if(all){
-      F.found=true; store.set("tidepool.found."+F.name,"1");
-      toast("You traced <b>"+F.name+"</b>"); Snd.chime(81);
+      F.found=true; saveFound();
+      var doneN=0; for(var q2=0;q2<FIGURES.length;q2++) if(FIGURES[q2].found) doneN++;
+      var upN=0; for(var q3=0;q3<FIGURES.length;q3++) if(figureUp(FIGURES[q3])) upN++;
+      toast("You traced <b>"+F.name+"</b>"+(doneN>=upN?" &mdash; that is all of tonight's":""));
+      Snd.chime(81);
       picked=[]; activeFig=null; renderSkyList(); return true;
     }
   }
@@ -3552,16 +3696,23 @@ window.addEventListener("pointerup",function(){
 window.addEventListener("keydown",function(e){
   noteActivity();
   if(document.activeElement===pad) return;
-  if(e.code==="Space"){ e.preventDefault(); if(!charging){charging=true;chargeStart=performance.now()} }
-  if(e.code==="Escape"){ picked=[]; activeFig=null }
-  if(e.key==="h"||e.key==="H") document.body.classList.toggle("zen");
-  if(e.key===","||e.key==="<") turnView(-45);
-  if(e.key==="."||e.key===">") turnView(45);
-  if(e.key==="r"||e.key==="R") resetPanels();
-});
+  if(e.ctrlKey||e.altKey||e.metaKey) return;      // leave system shortcuts alone
+  var used=false;
+  if(e.code==="Space"){ if(!charging){charging=true;chargeStart=performance.now()} used=true }
+  else if(e.code==="Escape"){ picked=[]; activeFig=null; used=true }
+  else if(e.key==="h"||e.key==="H"){ document.body.classList.toggle("zen"); used=true }
+  else if(e.key===","||e.key==="<"){ turnView(-45); used=true }
+  else if(e.key==="."||e.key===">"){ turnView(45); used=true }
+  else if(e.key==="r"||e.key==="R"){ resetPanels(); used=true }
+  // swallow it, or the desktop underneath jumps between icons
+  if(used){ e.preventDefault(); e.stopPropagation() }
+},true);
 window.addEventListener("keyup",function(e){
-  if(e.code==="Space"&&charging){charging=false;throwStone(charge);charge=0;fill.style.width="0%"}
-});
+  if(e.code==="Space"&&charging){
+    charging=false; throwStone(charge); charge=0; fill.style.width="0%";
+    e.preventDefault(); e.stopPropagation();
+  }
+},true);
 
 // ---- Lively bridge ------------------------------------------------
 window.livelyPropertyListener=function(name,val){
@@ -3583,6 +3734,19 @@ window.livelyPropertyListener=function(name,val){
       VIEW = (val===0) ? null : ((val-1)*45);
       store.set("tidepool.view", VIEW===null?"":String(VIEW));
       updateClock(); break;
+    case "clockSize":
+      document.documentElement.style.setProperty("--clock",(0.6+val/100*1.1).toFixed(2));
+      placePanels(); break;
+    case "clockAlign":
+      var cl=document.getElementById("clock");
+      cl.dataset.align = ["left","center","right"][val]||"left";
+      delete cl.dataset.moved; store.set("tidepool.pos.clock","");
+      cl.style.left=""; cl.style.top=""; cl.style.right="";
+      placePanels(); break;
+    case "quality":
+      // 0 = automatic, otherwise pin it
+      if(val===0){ autoQ=true } else { autoQ=false; Q=[1,1,2,3][val]||2; layout() }
+      break;
     case "resetLayout": resetPanels(); break;
     case "musicFile":  if(val){playlist=[{name:String(val).replace(/\.[^.]+$/,""),url:"media/"+val}];loadTrack(0)} break;
     case "filmFile":   if(val){film.src="media/"+val;filmReady=true;screenOn=true;syncScr();film.play().catch(function(){})} break;
@@ -3610,6 +3774,10 @@ function reportError(err){
   document.body.appendChild(d);
 }
 
+// Watch the real cost of a frame. If the machine cannot keep up, step the
+// supersampling down before anything visible starts to stutter, and step it
+// back up when there is headroom again.
+var frameCost=0, adaptTimer=0, autoQ=true, qFloor=1;
 var last=0,acc=0,running=true;
 function loop(now){
   if(!running) return;
@@ -3623,7 +3791,20 @@ function loop(now){
   if(charging){ charge=Math.min(1,(now-chargeStart)/1100); fill.style.width=(charge*100)+"%" }
   readLevel(step); paintEq();
   stepWorld(step); stepWalker(step); stepStones(step); stepSplashes(step);
-  try{ draw(now/1000) }catch(err){ reportError(err); running=false }
+
+  var t0=performance.now();
+  try{ draw(now/1000) }catch(err){ reportError(err); running=false; return }
+  frameCost += ((performance.now()-t0) - frameCost)*0.05;
+
+  if(autoQ){
+    adaptTimer+=step;
+    if(adaptTimer>3){
+      adaptTimer=0;
+      var budget=1000/TARGET_FPS*0.55;      // leave over half the frame free
+      if(frameCost>budget && Q>qFloor){ Q--; layout(); frameCost=budget*0.6 }
+      else if(frameCost<budget*0.35 && Q<3){ Q++; layout(); frameCost=budget*0.6 }
+    }
+  }
 }
 document.addEventListener("visibilitychange",function(){
   if(document.hidden){running=false}
