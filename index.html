@@ -218,7 +218,7 @@
 <div id="starinfo"></div>
 <div id="toasts"></div>
 <div id="zentag">Press H for the widgets</div>
-<div id="colophon">Tidepool v19<br>No network &middot; real sky &middot; synthesised sound</div>
+<div id="colophon">Tidepool v20<br>No network &middot; real sky &middot; synthesised sound</div>
 
 <input type="file" id="audioInput" accept="audio/*" multiple>
 <input type="file" id="videoInput" accept="video/*">
@@ -2115,6 +2115,7 @@ function drawMoorings(t){
   ctx.fillRect(px-1,py-17,4,2);
   ctx.fillStyle="rgba(10,16,26,0.20)";
   ctx.fillRect(px-1,py+5,4,3);
+  drawPileWash(px+1, py+5, t, 4.2, 1.0);
 
   // ---- the moored boat, drawn big enough to actually read ----------
   var bx2=px-24, by2=py-1+bobA, byr=Math.round(by2);
@@ -3104,12 +3105,12 @@ function draw(t){
   drawSplashes();
   drawWash(t, shoreY);        // the sheet lies on the sand...
   drawBeachStanding(t, shoreY);  // ...and runs around anything standing in it
+  drawPier(t, shoreY);        // the pier stands in it too — and he walks past it
   drawCrabs(t);
-  drawWalker();               // ...he stands in it...
+  drawWalker();               // ...he stands in front of all of it...
   drawAnkleWash(t, shoreY);   // ...and only his ankles get covered
   drawBottle(t, shoreY);
   drawBird();
-  drawPier(t);
   drawFireflies();
   drawPops();
 }
@@ -3376,13 +3377,65 @@ function drawCinema(t){
   }
 }
 
-function drawPier(t){
+// Water working around a pile: a lick of foam either side, a faint ring, and
+// once in a while a small lap against it. Deliberately quieter than a stone
+// going in — you should half-notice it.
+function drawPileWash(px, waterY, t, seed, scale){
+  scale=scale||1;
+  var sw=Math.sin(t*1.15+seed)*0.5+Math.sin(t*0.47+seed*2.1)*0.5;
+  var lift=Math.round(sw*1.2*scale);
+  var wy=Math.round(waterY)+lift;
+
+  // the standing collar where the water meets the pile
+  ctx.fillStyle="rgba(255,255,255,"+(0.20+0.10*Math.abs(sw))+")";
+  ctx.fillRect(px-2,wy,5,1);
+  ctx.fillStyle="rgba(255,255,255,0.13)";
+  ctx.fillRect(px-4,wy+1,3,1); ctx.fillRect(px+2,wy+1,3,1);
+
+  // a ring drifting outward, restarting on its own slow cycle
+  var ph=((t*0.42+seed)%1);
+  var r=1+ph*7*scale;
+  var a=(1-ph)*0.22;
+  if(a>0.02){
+    ctx.fillStyle="rgba(226,240,246,"+a+")";
+    ctx.fillRect(Math.round(px-r),wy+1,1,1);
+    ctx.fillRect(Math.round(px+r),wy+1,1,1);
+    if(r>3){
+      ctx.fillStyle="rgba(226,240,246,"+(a*0.5)+")";
+      ctx.fillRect(Math.round(px-r*0.6),wy+2,1,1);
+      ctx.fillRect(Math.round(px+r*0.6),wy+2,1,1);
+    }
+  }
+  // now and then the swell laps a little harder against it
+  // two slow rates beating together, so the harder lap comes irregularly
+  var lap=Math.sin(t*0.41+seed*3.7)*0.6+Math.sin(t*0.17+seed*1.9)*0.4;
+  if(lap>0.93){
+    var f=(lap-0.93)/0.07;
+    ctx.fillStyle="rgba(255,255,255,"+(0.34*f)+")";
+    ctx.fillRect(px-3,wy-1,7,1);
+    ctx.fillStyle="rgba(255,255,255,"+(0.18*f)+")";
+    ctx.fillRect(px-1,wy-2,3,1);
+  }
+}
+
+function drawPier(t, shoreY){
   var x0=LM.pier,y0=EDGE-14;
   var dark=sky.glow>0.5?"#0A1320":"#463A33";
   ctx.fillStyle=dark;
   ctx.fillRect(x0-34,y0,62,3);
   for(var p=0;p<6;p++) ctx.fillRect(x0-30+p*11,y0+3,2,16);
   ctx.fillRect(x0+25,y0-13,2,13);
+
+  // where each pile enters the water. Piles further up the beach sit in the
+  // swash rather than the sea, so their collar is smaller.
+  var water = shoreY ? null : null;
+  for(var q=0;q<6;q++){
+    var px=x0-30+q*11+1;
+    var wl = shoreY ? Math.min(shoreY(px), EDGE-tide.height*8) : EDGE;
+    if(wl > y0+19) continue;                 // this one is on dry sand
+    var depth=Math.max(0,Math.min(1,(y0+19-wl)/16));
+    drawPileWash(px, wl, t, q*1.7, 0.55+depth*0.6);
+  }
   if(sky.glow>0.3){
     var fl=reduced?1:(0.86+0.14*Math.sin(t*3.4)), pu=fl*(1+level*0.8);
     ctx.fillStyle="rgba(255,217,125,"+(0.075*sky.glow*pu)+")"; ctx.fillRect(x0+14,y0-28,25,26);
