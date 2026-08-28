@@ -218,7 +218,7 @@
 <div id="starinfo"></div>
 <div id="toasts"></div>
 <div id="zentag">Press H for the widgets</div>
-<div id="colophon">Tidepool v17<br>No network &middot; real sky &middot; synthesised sound</div>
+<div id="colophon">Tidepool v18<br>No network &middot; real sky &middot; synthesised sound</div>
 
 <input type="file" id="audioInput" accept="audio/*" multiple>
 <input type="file" id="videoInput" accept="video/*">
@@ -2927,7 +2927,10 @@ function draw(t){
   drawGulls();
 
   // ---- sea, in bands that get taller and slower toward the shore
-  ctx.fillStyle=sky.sea; ctx.fillRect(0,HORIZON,W,EDGE-HORIZON+2);
+  // Reach well below the lowest possible waterline: tide can drop it 8px and
+  // the wobble another 3. Anything short of that leaves canvas unpainted, and
+  // whatever was drawn there last frame stays put.
+  ctx.fillStyle=sky.sea; ctx.fillRect(0,HORIZON,W,(EDGE+16)-HORIZON);
 
   if(sun.alt>-7 && inView(sun.az)){
     ctx.fillStyle="rgba(255,228,175,"+(0.09+sky.glow*0.07)+")";
@@ -3021,8 +3024,10 @@ function draw(t){
   ctx.lineTo(W,H); ctx.closePath(); ctx.fill();
 
   // wet sand strip, darker, right at the waterline
-  ctx.fillStyle="rgba(0,0,0,0.20)";
-  for(var wx2=0;wx2<=W;wx2+=2) ctx.fillRect(wx2,shoreY(wx2)|0,2,7);
+  ctx.fillStyle="rgba(0,0,0,0.16)";
+  ctx.beginPath();
+  for(var wx2=0;wx2<=W;wx2+=2) ctx.rect(wx2,shoreY(wx2)|0,2,6);
+  ctx.fill();
   // the strand line: sand the tide has uncovered since high water, paler
   if(tide.height<0.15){
     ctx.fillStyle="rgba(255,255,255,"+(0.035*(0.15-tide.height))+")";
