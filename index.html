@@ -218,7 +218,7 @@
 <div id="starinfo"></div>
 <div id="toasts"></div>
 <div id="zentag">Press H for the widgets</div>
-<div id="colophon">Tidepool v18<br>No network &middot; real sky &middot; synthesised sound</div>
+<div id="colophon">Tidepool v19<br>No network &middot; real sky &middot; synthesised sound</div>
 
 <input type="file" id="audioInput" accept="audio/*" multiple>
 <input type="file" id="videoInput" accept="video/*">
@@ -1473,6 +1473,13 @@ function stepWorld(dt){
       C.x+=C.dir*23*dt;
       if(C.x<6||C.x>W-6){ C.dir=-C.dir; C.x=Math.max(6,Math.min(W-6,C.x)) }
     }
+    // a wave coming up the sand sends them scuttling higher, as they do
+    var wet=EDGE-tide.height*8+washReach();
+    if(C.y < wet+3){
+      C.y += 34*dt;
+      C.state="run"; C.timer=Math.max(C.timer,0.35);
+      if(C.y>H-9) C.y=H-9;
+    }
   }
 
   // waves break on an irregular rhythm, and the sound follows the picture
@@ -1981,15 +1988,7 @@ function drawBeachDetail(t, shoreY){
            ctx.fillStyle=night?"rgba(90,104,120,0.5)":"rgba(226,208,186,0.9)";
            ctx.fillRect(sh.x|0,sh.y|0,1,1) }
   }
-  // driftwood
-  for(var dI=0;dI<beachProps.wood.length;dI++){
-    var wd=beachProps.wood[dI];
-    ctx.fillStyle= night ? "#121922" : "#6B5340";
-    ctx.fillRect(wd.x|0,wd.y|0,wd.w|0,2);
-    ctx.fillRect((wd.x+wd.w*0.3)|0,(wd.y-1)|0,3,1);
-    ctx.fillStyle="rgba(0,0,0,0.10)";
-    ctx.fillRect(wd.x|0,(wd.y+2)|0,(wd.w+2)|0,1);
-  }
+
   // footprints the walker has left
   for(var fI=0;fI<prints.length;fI++){
     var pr=prints[fI];
@@ -1997,11 +1996,41 @@ function drawBeachDetail(t, shoreY){
     ctx.fillRect(pr.x|0,pr.y|0,2,1);
 
   }
+}
+
+// Anything that stands proud of the sand is drawn AFTER the swash, so the
+// water runs around it rather than over it — and gets a collar of foam where
+// the two meet, which is what sells it.
+function drawBeachStanding(t, shoreY){
+  if(!beachProps) return;
+  var night=sky.glow>0.5;
+  var reach=washReach();
+  var wetTo=function(x){ return shoreY(x)+reach };   // how far the water is up
+
+  // driftwood
+  for(var dI=0;dI<beachProps.wood.length;dI++){
+    var wd=beachProps.wood[dI];
+    var submerged = wetTo(wd.x) > wd.y;
+    ctx.fillStyle="rgba(0,0,0,0.10)";
+    ctx.fillRect(wd.x|0,(wd.y+2)|0,(wd.w+2)|0,1);
+    ctx.fillStyle= night ? "#121922" : (submerged?"#4E3B2C":"#6B5340");
+    ctx.fillRect(wd.x|0,wd.y|0,wd.w|0,2);
+    ctx.fillRect((wd.x+wd.w*0.3)|0,(wd.y-1)|0,3,1);
+    if(submerged){
+      // water piling against the upstream side, and foam either end
+      ctx.fillStyle="rgba(255,255,255,0.42)";
+      ctx.fillRect(wd.x|0,(wd.y-1)|0,wd.w|0,1);
+      ctx.fillStyle="rgba(255,255,255,0.26)";
+      ctx.fillRect((wd.x-2)|0,wd.y|0,2,2);
+      ctx.fillRect((wd.x+wd.w)|0,wd.y|0,2,2);
+    }
+  }
+
   // the beached rowing boat
-  var b=beachProps.boat;
+  var b=beachProps.boat, bsub = wetTo(b.x) > b.y+2;
   ctx.fillStyle="rgba(0,0,0,0.13)";
   ctx.fillRect(b.x-13,b.y+3,28,2);
-  ctx.fillStyle= night ? "#111A25" : "#5E4A3C";
+  ctx.fillStyle= night ? "#111A25" : (bsub?"#4A392C":"#5E4A3C");
   ctx.beginPath();
   ctx.moveTo(b.x-13,b.y-3); ctx.lineTo(b.x+14,b.y-3);
   ctx.lineTo(b.x+10,b.y+3); ctx.lineTo(b.x-9,b.y+3);
@@ -2011,6 +2040,16 @@ function drawBeachDetail(t, shoreY){
   ctx.fillStyle= night ? "#111A25" : "#4A3A2E";
   ctx.fillRect(b.x-3,b.y-2,2,4);
   ctx.fillRect(b.x-18,b.y-1,7,1);                      // oar leaning out
+  if(bsub){
+    // the sea washing round her hull
+    ctx.fillStyle="rgba(255,255,255,0.45)";
+    ctx.fillRect(b.x-14,(b.y+3)|0,29,1);
+    ctx.fillStyle="rgba(255,255,255,0.28)";
+    ctx.fillRect(b.x-16,(b.y+1)|0,3,3);
+    ctx.fillRect(b.x+14,(b.y+1)|0,3,3);
+    ctx.fillStyle="rgba(160,204,214,0.22)";
+    ctx.fillRect(b.x-13,(b.y+4)|0,27,2);
+  }
 }
 
 // The rest reminder: a bottle rides in on the swell and grounds near him.
@@ -2037,9 +2076,14 @@ function drawBottle(t, shoreY){
 }
 
 function drawCrabs(t){
+  var wet=EDGE-tide.height*8+washReach();
   for(var i=0;i<crabs.length;i++){
     var C=crabs[i], x=C.x|0, y=C.y|0;
     ctx.fillStyle="rgba(0,0,0,0.13)"; ctx.fillRect(x-2,y+2,6,1);
+    if(C.y<wet+2){                       // ankle-deep, so foam breaks on it
+      ctx.fillStyle="rgba(255,255,255,0.34)";
+      ctx.fillRect(x-2,y+1,6,1);
+    }
     ctx.fillStyle=sky.glow>0.5?"#2A1E1C":"#8C4A38";
     ctx.fillRect(x-1,y,4,2);
     ctx.fillRect(x-2,y-1,1,1); ctx.fillRect(x+3,y-1,1,1);   // claws
@@ -3055,11 +3099,12 @@ function draw(t){
   ctx.fill();
 
   drawCinema(t);
-  drawBeachDetail(t, shoreY);
-  drawCrabs(t);
+  drawBeachDetail(t, shoreY); // shells, weed, footprints — these DO get covered
   drawStones();
   drawSplashes();
   drawWash(t, shoreY);        // the sheet lies on the sand...
+  drawBeachStanding(t, shoreY);  // ...and runs around anything standing in it
+  drawCrabs(t);
   drawWalker();               // ...he stands in it...
   drawAnkleWash(t, shoreY);   // ...and only his ankles get covered
   drawBottle(t, shoreY);
