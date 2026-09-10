@@ -218,7 +218,7 @@
 <div id="starinfo"></div>
 <div id="toasts"></div>
 <div id="zentag">Press H for the widgets</div>
-<div id="colophon">Tidepool v20<br>No network &middot; real sky &middot; synthesised sound</div>
+<div id="colophon">Tidepool v21<br>No network &middot; real sky &middot; synthesised sound</div>
 
 <input type="file" id="audioInput" accept="audio/*" multiple>
 <input type="file" id="videoInput" accept="video/*">
@@ -2099,15 +2099,23 @@ function drawCrabs(t){
 function drawMoorings(t){
   var night=sky.glow>0.5;
   var dark=night?"#0A1320":"#4A3A2E";
-  var px=Math.round(W*0.70), py=EDGE-Math.round(tide.height*8)-9;
+  var px=Math.round(W*0.70);
+  var waterY=EDGE-tide.height*8;
+  var floatY=Math.round(waterY)-9;        // where she would float
+  var groundY=EDGE-7;                     // where the seabed stops her
+  var aground=floatY>groundY;
+  var py=aground?groundY:floatY;
   // A moored boat barely moves. It lifts on the swell and settles, and the
   // motion scales with the tidal range — almost still at neaps and slack
   // water, livelier on a spring flood. It is not a river.
-  var lively=0.35+tide.range*0.5+tide.current*0.45;
+  // Once she is on the bottom she stops moving. That is the whole difference
+  // between a boat afloat and a boat aground, and it is what was missing.
+  var lively=aground?0:(0.35+tide.range*0.5+tide.current*0.45);
   if(sky.glow>0.5) lively*=1.25;                 // choppier after dark
   var bobA=(Math.sin(washPhase*1.15)*0.9+Math.sin(washPhase*0.47+1.3)*0.5)*lively;
   var bobB=(Math.sin(washPhase*1.15+1.1)*0.8+Math.sin(washPhase*0.6)*0.4)*lively;
-  var heel=Math.sin(washPhase*1.15+0.4)*lively*0.6;
+  // aground she leans over on her bilge, which is what boats do
+  var heel=aground?1.6:Math.sin(washPhase*1.15+0.4)*lively*0.6;
 
   // the pole
   ctx.fillStyle=dark;
@@ -2121,10 +2129,22 @@ function drawMoorings(t){
   var bx2=px-24, by2=py-1+bobA, byr=Math.round(by2);
   var hl=Math.round(heel);
 
-  // its reflection, broken by the surface
-  ctx.fillStyle="rgba(10,16,26,0.22)";
-  for(var rr2=0;rr2<3;rr2++)
-    ctx.fillRect(bx2-11+Math.round(Math.sin(washPhase*2+rr2)*1.5),byr+6+rr2,22-rr2*4,1);
+  if(aground){
+    // wet sand where the water has just left her, and a shadow instead of
+    // a reflection
+    ctx.fillStyle="rgba(0,0,0,0.14)";
+    ctx.fillRect(bx2-14,byr+6,30,2);
+    ctx.fillStyle="rgba(60,72,66,0.16)";
+    ctx.fillRect(bx2-16,byr+5,34,4);
+    // a shallow pool trapped under her
+    ctx.fillStyle="rgba(150,190,200,0.13)";
+    ctx.fillRect(bx2-9,byr+5,19,1);
+  } else {
+    // its reflection, broken by the surface
+    ctx.fillStyle="rgba(10,16,26,0.22)";
+    for(var rr2=0;rr2<3;rr2++)
+      ctx.fillRect(bx2-11+Math.round(Math.sin(washPhase*2+rr2)*1.5),byr+6+rr2,22-rr2*4,1);
+  }
 
   // hull: dark below the rubbing strake, pale topsides
   ctx.fillStyle=night?"#0B1420":"#4A3A2C";
@@ -2152,11 +2172,11 @@ function drawMoorings(t){
   ctx.fillStyle=night?"#16222E":"#9A8262";
   ctx.fillRect(bx2+8,byr+2,1,2); ctx.fillRect(bx2-8,byr+2,1,2);
 
-  // the mooring line, sagging and taking up as she rides
+  // the mooring line: slack when she is sitting on the bottom
   ctx.strokeStyle=night?"rgba(150,172,192,0.34)":"rgba(64,52,40,0.62)";
   ctx.lineWidth=1; ctx.beginPath();
   ctx.moveTo(bx2+13+hl,byr+1);
-  ctx.quadraticCurveTo((bx2+13+px)/2,byr+5+bobA*0.5,px,py-13);
+  ctx.quadraticCurveTo((bx2+13+px)/2,byr+(aground?9:5)+bobA*0.5,px,py-13);
   ctx.stroke();
 
   // a lamp aboard, and its long reflection
@@ -2169,8 +2189,9 @@ function drawMoorings(t){
       ctx.fillRect(bx2+Math.round(Math.sin(washPhase*2.2+lr)*2),byr+6+lr*2,3,1);
     }
   }
-  // water breaking against her at night, or on a big spring tide
-  if((night||tide.range>0.85) && Math.sin(washPhase*1.15)>0.72){
+  // water breaking against her at night, or on a big spring tide —
+  // but only while she is actually in it
+  if(!aground && (night||tide.range>0.85) && Math.sin(washPhase*1.15)>0.72){
     var sl=(Math.sin(washPhase*1.15)-0.72)/0.28;
     ctx.fillStyle="rgba(255,255,255,"+(0.42*sl)+")";
     ctx.fillRect(bx2-15+hl,byr+3,5,1);
@@ -2981,7 +3002,7 @@ function draw(t){
     ctx.fillStyle="rgba(255,228,175,"+(0.09+sky.glow*0.07)+")";
     for(var k=0;k<20;k++){
       var yy=HORIZON+k*4, wob=reduced?0:Math.sin(t*1.1+k*0.9)*(2+k*0.5);
-      if(yy>EDGE-4) break;
+      if(yy>(EDGE-tide.height*8)-4) break;
       ctx.fillRect((sx-8-k*1.4+wob)|0,yy,(16+k*2.6)|0,1);
     }
   } else if(moon.alt>2 && moon.lit>0.15 && inView(moon.az)){
@@ -2989,7 +3010,7 @@ function draw(t){
     ctx.fillStyle="rgba(200,220,245,"+(0.05*sky.glow*moon.lit)+")";
     for(var q2=0;q2<13;q2++){
       var wy2=HORIZON+q2*4, wb=reduced?0:Math.sin(t*0.9+q2)*(2+q2*0.4);
-      if(wy2>EDGE-4) break;
+      if(wy2>(EDGE-tide.height*8)-4) break;
       ctx.fillRect((mpx-5-q2+wb)|0,wy2,(10+q2*1.8)|0,1);
     }
   }
@@ -3014,12 +3035,18 @@ function draw(t){
     }
   }
 
+  // The water's edge moves with the tide, so the whole swell has to be laid
+  // out against it. Drawn against a fixed EDGE, waves ran over ground that
+  // was dry — straight across the pier piles at low water.
+  var WY = EDGE - tide.height*8;
+
   // swell: perspective rows, each crest breaking whiter as it nears the beach
   var boost=1+level*1.3;
   var rows=16;
   for(var w=0;w<rows;w++){
     var f=w/rows;
-    var wy=HORIZON+6+Math.pow(f,1.45)*(EDGE-HORIZON-8);
+    var wy=HORIZON+6+Math.pow(f,1.45)*(WY-HORIZON-8);
+    if(wy>WY-1) continue;                 // never below the water's edge
     var amp=(0.5+f*3.2)*boost*(0.6+tide.range*0.55);
     // tidal streams run fastest at mid-tide and stop at slack water
     var flow=0.30+tide.current*0.55;
@@ -3490,11 +3517,30 @@ function updateClock(){
   renderSkyList();
 }
 
-// Which figure does a star belong to, and is that figure fully up tonight?
-function figureOf(i){
+// Some stars belong to more than one figure — Alpheratz is a corner of both
+// the Great Square and Andromeda. Returning only the first match made the
+// other one unreachable, so gather them all.
+function figuresOf(i){
+  var out=[];
   for(var f=0;f<FIGURES.length;f++)
-    if(FIGURES[f].si.indexOf(i)>=0) return FIGURES[f];
-  return null;
+    if(FIGURES[f].si.indexOf(i)>=0) out.push(FIGURES[f]);
+  return out;
+}
+// Pick the most useful one: not yet traced and fully up, before anything else.
+// Clicking the same shared star again steps to the next candidate.
+function figureOf(i,after){
+  var list=figuresOf(i);
+  if(!list.length) return null;
+  var ranked=list.slice().sort(function(a,b){
+    var sa=(a.found?2:0)+(figureUp(a)?0:1);
+    var sb=(b.found?2:0)+(figureUp(b)?0:1);
+    return sa-sb;
+  });
+  if(after){
+    var at=ranked.indexOf(after);
+    if(at>=0 && ranked.length>1) return ranked[(at+1)%ranked.length];
+  }
+  return ranked[0];
 }
 function figureUp(F){
   for(var i=0;i<F.si.length;i++){
@@ -3523,12 +3569,17 @@ function renderHover(){
   rows+="<div class='sr'><span>Magnitude</span><span>"+st[3].toFixed(2)+"</span></div>";
   rows+="<div class='sr'><span>Altitude</span><span>"+alt.toFixed(0)+"&deg;</span></div>";
   rows+="<div class='sr'><span>Bearing</span><span>"+compass(starAzimuth(i))+"</span></div>";
-  if(F){
-    var up=figureUp(F);
-    rows+="<div class='sr'><span>Part of</span><span>"+F.name+"</span></div>";
-    rows+="<div class='sf'>"+(F.found ? "Already traced"
+  var all=figuresOf(i);
+  if(all.length){
+    var names=[];
+    for(var q=0;q<all.length;q++) names.push(all[q].name);
+    rows+="<div class='sr'><span>Part of</span><span>"+names.join(", ")+"</span></div>";
+    var F2=figureOf(i);
+    var up=figureUp(F2);
+    rows+="<div class='sf'>"+(F2.found ? "Already traced"
         : up ? "Fully above the horizon &mdash; click its stars to trace it"
-             : "Part of it is below the horizon tonight")+"</div>";
+             : "Part of it is below the horizon tonight")
+        +(all.length>1?" &middot; shared between "+all.length+" figures":"")+"</div>";
   }
   box.innerHTML=rows;
   box.classList.add("on");
@@ -3767,7 +3818,12 @@ window.addEventListener("pointerdown",function(e){
   if(b.y<HORIZON && sky.glow>0.45){
     var i=nearestStar(b.x,b.y,8);
     if(i>=0){
-      var fig=figureOf(i);
+      // if this star is shared and we are already on one of its figures,
+      // clicking it again offers the next
+      var shared=figuresOf(i);
+      var fig=(activeFig && shared.length>1 && shared.indexOf(activeFig)>=0 &&
+               picked.length<=1)
+              ? figureOf(i,activeFig) : figureOf(i);
       if(!fig){ toast("That star is not part of a figure I know"); return }
       if(fig.found){ toast("<b>"+fig.name+"</b> is already traced"); return }
       if(!figureUp(fig)){
@@ -3777,7 +3833,10 @@ window.addEventListener("pointerdown",function(e){
       if(activeFig!==fig){
         // starting a new figure: show its shape and how many stars it needs
         activeFig=fig; picked=[i];
-        toast("<b>"+fig.name+"</b> &mdash; "+fig.si.length+" stars, follow the rings");
+        var alsoIn=shared.length>1
+          ? " &middot; <span style='opacity:.7'>click again for "+
+            figureOf(i,fig).name+"</span>" : "";
+        toast("<b>"+fig.name+"</b> &mdash; "+fig.si.length+" stars, follow the rings"+alsoIn);
         return;
       }
       var at=picked.indexOf(i);
