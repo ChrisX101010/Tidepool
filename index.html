@@ -218,7 +218,7 @@
 <div id="starinfo"></div>
 <div id="toasts"></div>
 <div id="zentag">Press H for the widgets</div>
-<div id="colophon">Tidepool v21<br>No network &middot; real sky &middot; synthesised sound</div>
+<div id="colophon">Tidepool v22<br>No network &middot; real sky &middot; synthesised sound</div>
 
 <input type="file" id="audioInput" accept="audio/*" multiple>
 <input type="file" id="videoInput" accept="video/*">
@@ -3409,20 +3409,21 @@ function drawCinema(t){
 // going in — you should half-notice it.
 function drawPileWash(px, waterY, t, seed, scale){
   scale=scale||1;
+  var vis=Math.max(0,Math.min(1,scale));   // also dims the whole collar
   var sw=Math.sin(t*1.15+seed)*0.5+Math.sin(t*0.47+seed*2.1)*0.5;
   var lift=Math.round(sw*1.2*scale);
   var wy=Math.round(waterY)+lift;
 
   // the standing collar where the water meets the pile
-  ctx.fillStyle="rgba(255,255,255,"+(0.20+0.10*Math.abs(sw))+")";
+  ctx.fillStyle="rgba(255,255,255,"+((0.20+0.10*Math.abs(sw))*vis)+")";
   ctx.fillRect(px-2,wy,5,1);
-  ctx.fillStyle="rgba(255,255,255,0.13)";
+  ctx.fillStyle="rgba(255,255,255,"+(0.13*vis)+")";
   ctx.fillRect(px-4,wy+1,3,1); ctx.fillRect(px+2,wy+1,3,1);
 
   // a ring drifting outward, restarting on its own slow cycle
   var ph=((t*0.42+seed)%1);
   var r=1+ph*7*scale;
-  var a=(1-ph)*0.22;
+  var a=(1-ph)*0.22*vis;
   if(a>0.02){
     ctx.fillStyle="rgba(226,240,246,"+a+")";
     ctx.fillRect(Math.round(px-r),wy+1,1,1);
@@ -3438,30 +3439,54 @@ function drawPileWash(px, waterY, t, seed, scale){
   var lap=Math.sin(t*0.41+seed*3.7)*0.6+Math.sin(t*0.17+seed*1.9)*0.4;
   if(lap>0.93){
     var f=(lap-0.93)/0.07;
-    ctx.fillStyle="rgba(255,255,255,"+(0.34*f)+")";
+    ctx.fillStyle="rgba(255,255,255,"+(0.34*f*vis)+")";
     ctx.fillRect(px-3,wy-1,7,1);
-    ctx.fillStyle="rgba(255,255,255,"+(0.18*f)+")";
+    ctx.fillStyle="rgba(255,255,255,"+(0.18*f*vis)+")";
     ctx.fillRect(px-1,wy-2,3,1);
   }
 }
 
 function drawPier(t, shoreY){
   var x0=LM.pier,y0=EDGE-14;
-  var dark=sky.glow>0.5?"#0A1320":"#463A33";
+  // at night the old value was almost the same as the sea behind it
+  var dark=sky.glow>0.5?"#1A2634":"#463A33";
+  var edgeLit=sky.glow>0.5?"#26333F":"#5A4B41";
   ctx.fillStyle=dark;
   ctx.fillRect(x0-34,y0,62,3);
-  for(var p=0;p<6;p++) ctx.fillRect(x0-30+p*11,y0+3,2,16);
+  ctx.fillStyle=edgeLit;
+  ctx.fillRect(x0-34,y0,62,1);                 // top of the decking catches light
+  ctx.fillStyle=dark;
+  for(var p=0;p<6;p++){
+    ctx.fillRect(x0-30+p*11,y0+3,2,16);
+    ctx.fillStyle=edgeLit;
+    ctx.fillRect(x0-30+p*11,y0+3,1,16);        // lit side of each post
+    ctx.fillStyle=dark;
+  }
   ctx.fillRect(x0+25,y0-13,2,13);
 
-  // where each pile enters the water. Piles further up the beach sit in the
-  // swash rather than the sea, so their collar is smaller.
-  var water = shoreY ? null : null;
-  for(var q=0;q<6;q++){
-    var px=x0-30+q*11+1;
-    var wl = shoreY ? Math.min(shoreY(px), EDGE-tide.height*8) : EDGE;
-    if(wl > y0+19) continue;                 // this one is on dry sand
-    var depth=Math.max(0,Math.min(1,(y0+19-wl)/16));
-    drawPileWash(px, wl, t, q*1.7, 0.55+depth*0.6);
+  // A pile only disturbs water where there IS water. The edge moves with the
+  // swash, so when the sea draws back and the sand round a post goes dry, its
+  // collar has to go with it — otherwise you get ripples on a dry beach.
+  if(shoreY){
+    var reachNow=washReach();
+    var pileTop=y0+3, pileBase=y0+19;
+    for(var q=0;q<6;q++){
+      var px=x0-30+q*11+1;
+      var base=shoreY(px);
+      var wob=Math.sin(px*0.031+washPhase*1.3)*2.2+Math.sin(px*0.011-washPhase)*1.4;
+      var edge=base+reachNow+wob;            // where the water actually is now
+
+      // no collar unless the water's edge is somewhere on this post
+      if(edge<pileTop-1 || edge>pileBase+2) continue;
+
+      // strength follows how much of the post is standing in it, and fades
+      // right down as the water retreats off the bottom of it
+      var wet=Math.max(0,Math.min(1,(edge-pileTop)/(pileBase-pileTop)));
+      var near=Math.min(1,(pileBase+2-edge)/4);
+      var str=(0.4+wet*0.7)*Math.max(0,Math.min(1,near));
+      if(str<0.06) continue;
+      drawPileWash(px, edge, t, q*1.7, str);
+    }
   }
   if(sky.glow>0.3){
     var fl=reduced?1:(0.86+0.14*Math.sin(t*3.4)), pu=fl*(1+level*0.8);
